@@ -9,11 +9,27 @@
 Превращение текста исходного файла в набор токенов.
 
 Ключевые токены: 
-* 
+* ['!', '\', '\\']  - SPECIAL_SYMBOL
+* [ая-АЯ]             - STRING_LITERAL
+* текст после !     - VARIABLE_NAME
+* текст после \     - COMMAND_NAME
 
-Реализовать как автомат (state-machine) считывающую токены и строющую дерево 
+> Реализовать как автомат (state-machine)  
 
-> Reference: https://www.overleaf.com/learn/latex/Articles/What_is_a_%22TeX_token%22%3F#The_journey_from_input_text_to_TeX_tokens
+Посимвольно читая команду мы берём её хэш-функцию и даём ей номер. По этому номеру можно будет найти команду в таблице 
+
+_________________________________________________________
+|   COMMAND |   COMMAND CODE    |   COMMAND MODIFIER    |
+|-----------|-------------------|-----------------------|
+|   \раздел |       95          |           0           |
+|-----------|-------------------|-----------------------|
+...
+
+Где **COMMAND** - 
+
+> References 
+> * https://www.overleaf.com/learn/latex/Articles/What_is_a_%22TeX_token%22%3F#The_journey_from_input_text_to_TeX_tokens
+> * https://www.overleaf.com/learn/latex/Articles/What_is_a_TeX_token_list
 
 ## 1.2 Синтаксический анализ
 
