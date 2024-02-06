@@ -1,5 +1,9 @@
+module yard.main;
+
 import std.stdio : writef;
 import std.file;
+
+import yard.lexer;
 
 int main()
 {
@@ -77,5 +81,7 @@ int main()
   write("../test/file.pdf", content);
   writef("created file with size %ul", getSize("../test/file.txt"));
   
+  Lexer lexer = new Lexer("text");
+
   return 0;
 }
