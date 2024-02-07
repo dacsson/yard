@@ -2,6 +2,9 @@ module yard.lexer;
 
 import std.stdio;
 import std.regex;
+import std.typecons;
+import std.conv;
+import std.utf;
 
 /**
  * Смысловая единица языка 
@@ -12,7 +15,7 @@ class Lex
   string type;
   string value;
 
-  this(uint id = 0, string type, string value)
+  this(uint id, string type, string value)
   {
     this.id = id;
     this.type = type;
@@ -20,125 +23,247 @@ class Lex
   }
 }
 
+class PlainLex 
+{
+  string type;
+  string value;
+
+  this(string type, string value)
+  {
+    this.type = type;
+    this.value = value; 
+  }
+}
+
+/** 
+ * Объект результата перехода состояния автомата, 
+ * имеет либо конечный результат, либо переход в другое состояние
+ */
+class StateValue
+{
+  string res;
+  string state;
+
+  this(string res, string state)
+  {
+    this.res = res;
+    this.state = state;
+  }
+}
+
 /**
  * Лексически анализатор
+ *
+ * Params: 
+ * input_text = входящий текст в формате ЯРД
+ * lex_table = таблица переходов состояний автомата
+ * result = исходный текст разбитый на лексемы
  */
 class Lexer
 {
   string input_text;
-  string[string][string][string] lex_table; 
-  string result;
+  StateValue[string][string] lex_table; 
+  PlainLex[] result;
 
-  void setup_table()
+  // Заполнить таблицу переходов состояний автомата
+  private StateValue[string][string] setup_table()
   {
-    this.lex_table["start"] = 
+    StateValue[string][string] _lex_table;
+
+    _lex_table["start"] = 
     [
-      "number"  : ["state" : "number"],
-      "name"    : ["state" : "name"],
-      "op"      : ["state" : "op"],
-      "special" : ["state" : "special"],
-      "indent"  : ["state" : "indent"],
-      "newline" : ["state" : "null"],
-      "null"    : ["state" : "null"],
-      "EOL"     : ["res" : "EOL"]
+      "number"  : new StateValue("0", "number"),
+      "name"    : new StateValue("0", "name"),
+      "op"      : new StateValue("0", "op"),
+      "special" : new StateValue("0", "special"),
+      "indent"  : new StateValue("0", "indent"),
+      "newline" : new StateValue("0", "newline"),
+      "null"    : new StateValue("0", "null"),
+      "EOL"     : new StateValue("EOL", "0")
     ];
-    this.lex_table["number"] = 
+    _lex_table["number"] = 
     [
-      "number"  : ["state" : "number"],
-      "name"    : ["state" : "null"],
-      "op"      : ["res" : "number"],
-      "special" : ["res" : "number"],
-      "indent"  : ["res" : "number"],
-      "newline" : ["res" : "number"],
-      "null"    : ["state" : "null"],
-      "EOL"     : ["res" : "number"]
+      "number"  : new StateValue("0", "number"),
+      "name"    : new StateValue("0", "null"),
+      "op"      : new StateValue("number", "0"),
+      "special" : new StateValue("number", "0"),
+      "indent"  : new StateValue("number", "0"),
+      "newline" : new StateValue("number", "0"),
+      "null"    : new StateValue("0", "null"),
+      "EOL"     : new StateValue("number", "0")
     ];
-    this.lex_table["name"] = 
+    _lex_table["name"] = 
     [
-      "number"  : ["state" : "name"],
-      "name"    : ["state" : "name"],
-      "op"      : ["res" : "name"],
-      "special" : ["res" : "name"],
-      "indent"  : ["res" : "name"],
-      "newline" : ["res" : "name"],
-      "null"    : ["state" : "null"],
-      "EOL"     : ["res" : "name"]
+      "number"  : new StateValue("0", "name"),
+      "name"    : new StateValue("0", "name"),
+      "op"      : new StateValue("name", "0"),
+      "special" : new StateValue("name", "0"),
+      "indent"  : new StateValue("name", "0"),
+      "newline" : new StateValue("name", "0"),
+      "null"    : new StateValue("0", "null"),
+      "EOL"     : new StateValue("name", "0")
     ];
-    this.lex_table["op"] = 
+    _lex_table["op"] = 
     [
-      "number"  : ["res" : "op"],
-      "name"    : ["res" : "op"],
-      "op"      : ["state" : "op"],
-      "special" : ["res" : "op"],
-      "indent"  : ["res" : "op"],
-      "newline" : ["res" : "op"],
-      "null"    : ["state" : "null"],
-      "EOL"     : ["res" : "op"]
+      "number"  : new StateValue("op", "0"),
+      "name"    : new StateValue("op", "0"),
+      "op"      : new StateValue("op", "0"),
+      "special" : new StateValue("op", "0"),
+      "indent"  : new StateValue("op", "0"),
+      "newline" : new StateValue("op", "0"),
+      "null"    : new StateValue("0", "null"),
+      "EOL"     : new StateValue("op", "0")
     ];
-    this.lex_table["special"] = 
+    _lex_table["special"] = 
     [
-      "number"  : ["res" : "special"],
-      "name"    : ["res" : "special"],
-      "op"      : ["res" : "special"],
-      "special" : ["res" : "special"],
-      "indent"  : ["res" : "special"],
-      "newline" : ["res" : "special"],
-      "null"    : ["state" : "null"],
-      "EOL"     : ["res" : "special"]
+      "number"  : new StateValue("special", "0"),
+      "name"    : new StateValue("special", "0"),
+      "op"      : new StateValue("special", "0"),
+      "special" : new StateValue("special", "0"),
+      "indent"  : new StateValue("special", "0"),
+      "newline" : new StateValue("special", "0"),
+      "null"    : new StateValue("0", "null"),
+      "EOL"     : new StateValue("special", "0")
     ];
-    this.lex_table["indent"] = 
+    _lex_table["indent"] = 
     [
-      "number"  : ["res" : "indent"],
-      "name"    : ["res" : "indent"],
-      "op"      : ["res" : "indent"],
-      "special" : ["res" : "indent"],
-      "indent"  : ["state" : "indent"],
-      "newline" : ["res" : "indent"],
-      "null"    : ["state" : "null"],
-      "EOL"     : ["res" : "indent"]
+      "number"  : new StateValue("indent", "0"),
+      "name"    : new StateValue("indent", "0"),
+      "op"      : new StateValue("indent", "0"),
+      "special" : new StateValue("indent", "0"),
+      "indent"  : new StateValue("0", "indent"),
+      "newline" : new StateValue("indent", "0"),
+      "null"    : new StateValue("0", "null"),
+      "EOL"     : new StateValue("indent", "0")
     ];
-    this.lex_table["newline"] = 
+    _lex_table["newline"] = 
     [
-      "number"  : ["res" : "newline"],
-      "name"    : ["res" : "newline"],
-      "op"      : ["res" : "newline"],
-      "special" : ["res" : "newline"],
-      "indent"  : ["res" : "newline"],
-      "newline" : ["res" : "newline"],
-      "null"    : ["state" : "null"],
-      "EOL"     : ["res" : "newline"]
+      "number"  : new StateValue("newline", "0"),
+      "name"    : new StateValue("newline", "0"),
+      "op"      : new StateValue("newline", "0"),
+      "special" : new StateValue("newline", "0"),
+      "indent"  : new StateValue("newline", "0"),
+      "newline" : new StateValue("newline", "0"),
+      "null"    : new StateValue("0", "null"),
+      "EOL"     : new StateValue("newline", "0")
     ];
-    this.lex_table["null"] = 
+    _lex_table["null"] = 
     [
-      "number"  : ["state" : "null"],
-      "name"    : ["state" : "null"],
-      "op"      : ["res" : "null"],
-      "special" : ["res" : "null"],
-      "indent"  : ["res" : "null"],
-      "newline" : ["state" : "null"],
-      "null"    : ["state" : "null"],
-      "EOL"     : ["res" : "null"]
+      "number"  : new StateValue("0", "null"),
+      "name"    : new StateValue("0", "null"),
+      "op"      : new StateValue("null", "0"),
+      "special" : new StateValue("null", "0"),
+      "indent"  : new StateValue("null", "0"),
+      "newline" : new StateValue("0", "null"),
+      "null"    : new StateValue("0", "null"),
+      "EOL"     : new StateValue("null", "0")
     ];
+
+    return _lex_table;
   }
 
   this(string input_text)
   {
     this.input_text = input_text;
-    setup_table();
-    writeln("Element: ", lex_table["start"]["number"]["state"]);
-
+    this.lex_table = setup_table();
   }
 
-  string get_symbol_class(string sym)
+  /**
+   * Определить класс лексемы 
+   * 
+   * Params: 
+   * sym = входяший символ
+   * 
+   * Returns: 3-мерный словарь переходов состояний для автомата для разных классов лексем
+   */
+  private string get_symbol_class(string sym)
   {
-    auto reg_number = ctRegex!(`[0-9]`);
-    auto reg_name = ctRegex!(`[]`)
-    switch(true)
+    if (sym == "EOL") return "EOL";
+    else if (!matchFirst(sym, `^\d+$`).empty()) return "number";
+    else if (!matchFirst(sym, `[\p{Cyrillic}+|\p{L}+]`).empty()) return "name";
+    else if (!matchFirst(sym, `[!\\()]`).empty()) return "op"; 
+    else if (sym == " ") return "indent";
+    else if (!matchFirst(sym, `\n`).empty()) return "newline";
+    else if (!matchFirst(sym, `\r`).empty()) return "special";
+    else return "null";
+  }
+
+  /** 
+   * Проанализировать входящий текст в ЯРД и выделить лексемы
+   *
+   * Returns: входящий текст разделённый на лексемы 
+   */
+  public PlainLex[] analyze()
+  {
+    int i = 0;
+    StateValue state = new StateValue("0", "0");
+    string init_state = "start";
+    bool shift = true;
+    string symbol = "";
+    Lex lex;
+    PlainLex plex;
+    string sym_class;
+    string cpy_str = input_text.dup;
+
+    int offset = 0;
+    int prev_size = to!int(input_text.length);
+    
+    int count_removes = 0;
+
+    string slice = "";
+
+    // for(int i = 0; i <= (cpy_str.length - 2); i++)
+    while(i<=cpy_str.length)
     {
-      case sym == "EOL" : return "EOL";
-      case 
-      default : return "null";
+      // decodeFront() берёт по одному символу из строки слева направо, декодирует с УТФ-8 и удаляет его из строки
+      string cpy_curr_str = input_text.dup;
+      symbol = (count_removes == cpy_str.length) ? "EOL" : to!string(input_text.decodeFront());
+      sym_class  = this.get_symbol_class(symbol);
+      state =  this.lex_table[init_state][sym_class];
+      
+      //writeln(" current offset ", offset, " / ", count_removes, " / ", i, " / ", cpy_str.length, " / ", input_text.length);
+      //writeln(" symb: ", symbol, " class: ", sym_class, "| init state: ", init_state, " | res : ", state.res, " | state ", state.state, " | ");
+
+      if(state.res != "0") 
+      {
+        lex = new Lex(0, state.res, slice);
+        writeln(" Лексема:\t", lex.type, "\tсо значением:\t", lex.value);
+        //writeln(" slice from ", pos, " to ", i, " from[] ", cpy_str[pos], " to ", cpy_str[i]);
+        plex = new PlainLex(lex.type, lex.value);
+        this.result ~= plex;
+
+        init_state = "start";
+
+        i = shift ? i-offset: i;
+        // writeln(" prev sym ", prev_symbol);
+        if(shift) {
+          symbol ~= input_text;
+          input_text = symbol;
+        }
+        slice = "";
+
+        shift = false;
+      }
+      else 
+      {
+        init_state = state.state;
+        shift = true;
+        slice ~= symbol;
+      }
+
+      i+=offset;
+
+      // удаление декодированого символа иногда может означать удаление как бы нескольких символов (из-за типа символа dchar)
+      offset =  prev_size - to!int(input_text.length); 
+      count_removes+=offset;
+
+      // запоминаем размер до удаления
+      prev_size = to!int(input_text.length);
+      //writeln(" slice ", slice);
+      if(symbol == "EOL") break;
     }
+
+    return this.result;
   }
 }
 
