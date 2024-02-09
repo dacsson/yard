@@ -1,16 +1,16 @@
 module yard.lexer;
 
-import std.stdio;
-import std.regex;
-import std.typecons;
-import std.conv;
-import std.utf;
+import std.regex : matchFirst;
+import std.conv : to;
+import std.utf : decodeFront;
 
 /**
- * Смысловая единица языка
- * @TODO заменить на record-like type 
+ * pair consisting of a token name and an optional attribute value. 
+ * The token name is an abstract symbol representing a kind of lexical unit, 
+ * e.g., a particular keyword, or sequence of input characters denoting an identifier. 
+ * The token names are the input symbols that the parser processes.
  */
-struct Lex 
+struct Token 
 {
   uint id;
   string type;
@@ -24,26 +24,9 @@ struct Lex
   }
 }
 
-/**
- * Блеклая копия лексемы
- * @TODO заменить на record-like type
- */
-struct PlainLex 
-{
-  string type;
-  string value;
-
-  this(string type, string value)
-  {
-    this.type = type;
-    this.value = value; 
-  }
-}
-
 /** 
  * Объект результата перехода состояния автомата, 
  * имеет либо конечный результат, либо переход в другое состояние
- * @TODO заменить на record-like type
  */
 struct StateValue
 {
@@ -110,7 +93,7 @@ class Lexer
 {
   string input_text;
   StateValue[string][string] lex_table; 
-  PlainLex[] result;
+  Token[] result;
 
   // Заполнить таблицу переходов состояний автомата
   private StateValue[string][string] setup_table()
@@ -219,17 +202,13 @@ class Lexer
    * Проанализировать входящий текст в ЯРД и выделить лексемы
    *
    * Returns: входящий текст разделённый на лексемы 
-   * 
-   * @TODO избавиться от лишних параметров
    */
-  public PlainLex[] analyze()
+  public Token[] get_tokens()
   {
     // Состояние автомата
     StateValue state =  StateValue("0", "0", "start");
-
     DecodedSymbol symbol;
-    
-    PlainLex plex;
+    Token plex;
 
     // копия изначального текста (для цикла, т.к. во время цикла меняется изначальная строка)
     string cpy_str = input_text.dup;
@@ -262,9 +241,8 @@ class Lexer
       // если состояние привело к результату, т.е. составлена полная лексема
       if(state.res != "0") 
       {
-        plex =  PlainLex(state.res, slice);
+        plex =  Token(0, state.res, slice);
         this.result ~= plex;
-
         state = StateValue("0", "0", "start");
 
         // продолжаем обход строки с той же позиции
@@ -272,9 +250,8 @@ class Lexer
           symbol.value ~= input_text;
           input_text = symbol.value;
         }
-        
-        slice = "";
 
+        slice = "";
         shift = false;
       }
       else 
@@ -297,5 +274,3 @@ class Lexer
     return this.result;
   }
 }
-
-
