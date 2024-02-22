@@ -4,17 +4,19 @@ import std.regex : matchFirst;
 import std.conv : to;
 import std.utf : decodeFront;
 
-enum States {
-  START,
-  NUMBER,
-  STR,
-  OP,
-  SPECIAL,
-  INLINE,
-  INDENT,
-  NEWLINE,
-  NULL,
-  EOL
+enum LexType {
+  LEX_NONE    ,
+  LEX_START   ,
+  LEX_NUM     ,
+  LEX_STR     ,
+  LEX_IDENT   ,
+  LEX_OP      ,
+  LEX_SPECIAL ,
+  LEX_INLINE  ,
+  LEX_INDENT  ,
+  LEX_NLINE   ,
+  LEX_NULL    ,
+  LEX_EOL
 }
 
 /**
@@ -26,10 +28,10 @@ enum States {
 struct Token 
 {
   uint id;
-  string type;
+  LexType type;
   string value;
 
-  this(uint id, string type, string value)
+  this(uint id, LexType type, string value)
   {
     this.id = id;
     this.type = type;
@@ -44,13 +46,13 @@ struct Token
 struct StateValue
 {
   // функция выхода
-  string res;
+  LexType res;
   // функция перехода
-  string next_state;
+  LexType next_state;
   // нынешнее состояние
-  string curr_state;
+  LexType curr_state;
 
-  this(string res, string next_state, string curr_state = "0")
+  this(LexType res, LexType next_state, LexType curr_state = LexType.LEX_NONE)
   {
     this.res = res;
     this.next_state = next_state;
@@ -65,7 +67,7 @@ struct StateValue
 class DecodedSymbol
 {
   string value;
-  string sym_class;
+  LexType sym_class;
 
   this(string value = "")
   {
@@ -81,16 +83,16 @@ class DecodedSymbol
    * 
    * Returns: 3-мерный словарь переходов состояний для автомата для разных классов лексем
    */
-  private string get_symbol_class(string sym)
+  private LexType get_symbol_class(string sym)
   {
-    if (sym == "EOL") return "EOL";
-    else if (!matchFirst(sym, `^\d+$`).empty()) return "number";
-    else if (!matchFirst(sym, `[\p{Cyrillic}+|\p{L}+]`).empty()) return "name";
-    else if (!matchFirst(sym, `[!\\()]`).empty()) return "op"; 
-    else if (sym == " ") return "indent";
-    else if (!matchFirst(sym, `\n`).empty()) return "newline";
-    else if (!matchFirst(sym, `\r`).empty()) return "special";
-    else return "null";
+    if (sym == "EOL") return LexType.LEX_EOL;
+    else if (!matchFirst(sym, `^\d+$`).empty()) return LexType.LEX_NUM;
+    else if (!matchFirst(sym, `[\p{Cyrillic}+|\p{L}+]`).empty()) return LexType.LEX_STR;
+    else if (!matchFirst(sym, `[!\\()]`).empty()) return LexType.LEX_OP; 
+    else if (sym == " ") return LexType.LEX_INDENT;
+    else if (!matchFirst(sym, `\n`).empty()) return LexType.LEX_NLINE;
+    else if (!matchFirst(sym, `\r`).empty()) return LexType.LEX_SPECIAL;
+    else return LexType.LEX_NULL;
   }
 }
 
@@ -105,89 +107,89 @@ class DecodedSymbol
 class Lexer
 {
   string input_text;
-  StateValue[string][string] lex_table; 
   Token[] result;
+  StateValue[LexType][LexType] lex_table; 
 
   // Заполнить таблицу переходов состояний автомата
-  private StateValue[string][string] setup_table()
+  private StateValue[LexType][LexType] setup_table()
   {
-    StateValue[string][string] _lex_table;
+    StateValue[LexType][LexType] _lex_table;
 
-    _lex_table["start"] = 
+    _lex_table[LexType.LEX_START] = 
     [
-      "name"    :  StateValue("0", "name"),
-      "op"      :  StateValue("0", "op"),
-      "special" :  StateValue("0", "special"),
-      "indent"  :  StateValue("0", "indent"),
-      "newline" :  StateValue("0", "newline"),
-      "null"    :  StateValue("0", "null"),
-      "EOL"     :  StateValue("EOL", "0")
+      LexType.LEX_STR    :  StateValue(LexType.LEX_NONE, LexType.LEX_STR),
+      LexType.LEX_OP      :  StateValue(LexType.LEX_NONE, LexType.LEX_OP),
+      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_NONE, LexType.LEX_SPECIAL),
+      LexType.LEX_INDENT  :  StateValue(LexType.LEX_NONE, LexType.LEX_INDENT),
+      LexType.LEX_NLINE :  StateValue(LexType.LEX_NONE, LexType.LEX_NLINE),
+      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
+      LexType.LEX_EOL     :  StateValue(LexType.LEX_EOL, LexType.LEX_NONE)
     ];
-    _lex_table["name"] = 
+    _lex_table[LexType.LEX_STR] = 
     [
-      "number"  :  StateValue("0", "name"),
-      "name"    :  StateValue("0", "name"),
-      "op"      :  StateValue("name", "0"),
-      "special" :  StateValue("name", "0"),
-      "indent"  :  StateValue("name", "0"),
-      "newline" :  StateValue("name", "0"),
-      "null"    :  StateValue("0", "null"),
-      "EOL"     :  StateValue("name", "0")
+      LexType.LEX_NUM  :  StateValue(LexType.LEX_NONE, LexType.LEX_STR),
+      LexType.LEX_STR    :  StateValue(LexType.LEX_NONE, LexType.LEX_STR),
+      LexType.LEX_OP      :  StateValue(LexType.LEX_STR, LexType.LEX_NONE),
+      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_STR, LexType.LEX_NONE),
+      LexType.LEX_INDENT  :  StateValue(LexType.LEX_STR, LexType.LEX_NONE),
+      LexType.LEX_NLINE :  StateValue(LexType.LEX_STR, LexType.LEX_NONE),
+      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
+      LexType.LEX_EOL     :  StateValue(LexType.LEX_STR, LexType.LEX_NONE)
     ];
-    _lex_table["op"] = 
+    _lex_table[LexType.LEX_OP] = 
     [
-      "number"  :  StateValue("op", "0"),
-      "name"    :  StateValue("op", "0"),
-      "op"      :  StateValue("op", "0"),
-      "special" :  StateValue("op", "0"),
-      "indent"  :  StateValue("op", "0"),
-      "newline" :  StateValue("op", "0"),
-      "null"    :  StateValue("0", "null"),
-      "EOL"     :  StateValue("op", "0")
+      LexType.LEX_NUM  :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
+      LexType.LEX_STR    :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
+      LexType.LEX_OP      :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
+      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
+      LexType.LEX_INDENT  :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
+      LexType.LEX_NLINE :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
+      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
+      LexType.LEX_EOL     :  StateValue(LexType.LEX_OP, LexType.LEX_NONE)
     ];
-    _lex_table["special"] = 
+    _lex_table[LexType.LEX_SPECIAL] = 
     [
-      "number"  :  StateValue("special", "0"),
-      "name"    :  StateValue("special", "0"),
-      "op"      :  StateValue("special", "0"),
-      "special" :  StateValue("special", "0"),
-      "indent"  :  StateValue("special", "0"),
-      "newline" :  StateValue("special", "0"),
-      "null"    :  StateValue("0", "null"),
-      "EOL"     :  StateValue("special", "0")
+      LexType.LEX_NUM  :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
+      LexType.LEX_STR    :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
+      LexType.LEX_OP      :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
+      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
+      LexType.LEX_INDENT  :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
+      LexType.LEX_NLINE :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
+      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
+      LexType.LEX_EOL     :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE)
     ];
-    _lex_table["indent"] = 
+    _lex_table[LexType.LEX_INDENT] = 
     [
-      "number"  :  StateValue("indent", "0"),
-      "name"    :  StateValue("indent", "0"),
-      "op"      :  StateValue("indent", "0"),
-      "special" :  StateValue("indent", "0"),
-      "indent"  :  StateValue("0", "indent"),
-      "newline" :  StateValue("indent", "0"),
-      "null"    :  StateValue("0", "null"),
-      "EOL"     :  StateValue("indent", "0")
+      LexType.LEX_NUM  :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
+      LexType.LEX_STR    :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
+      LexType.LEX_OP      :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
+      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
+      LexType.LEX_INDENT  :  StateValue(LexType.LEX_NONE, LexType.LEX_INDENT),
+      LexType.LEX_NLINE :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
+      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
+      LexType.LEX_EOL     :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE)
     ];
-    _lex_table["newline"] = 
+    _lex_table[LexType.LEX_NLINE] = 
     [
-      "number"  :  StateValue("newline", "0"),
-      "name"    :  StateValue("newline", "0"),
-      "op"      :  StateValue("newline", "0"),
-      "special" :  StateValue("newline", "0"),
-      "indent"  :  StateValue("newline", "0"),
-      "newline" :  StateValue("newline", "0"),
-      "null"    :  StateValue("0", "null"),
-      "EOL"     :  StateValue("newline", "0")
+      LexType.LEX_NUM  :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
+      LexType.LEX_STR    :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
+      LexType.LEX_OP      :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
+      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
+      LexType.LEX_INDENT  :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
+      LexType.LEX_NLINE :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
+      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
+      LexType.LEX_EOL     :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE)
     ];
-    _lex_table["null"] = 
+    _lex_table[LexType.LEX_NULL] = 
     [
-      "number"  :  StateValue("0", "null"),
-      "name"    :  StateValue("0", "null"),
-      "op"      :  StateValue("null", "0"),
-      "special" :  StateValue("null", "0"),
-      "indent"  :  StateValue("null", "0"),
-      "newline" :  StateValue("0", "null"),
-      "null"    :  StateValue("0", "null"),
-      "EOL"     :  StateValue("null", "0")
+      LexType.LEX_NUM  :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
+      LexType.LEX_STR    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
+      LexType.LEX_OP      :  StateValue(LexType.LEX_NULL, LexType.LEX_NONE),
+      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_NULL, LexType.LEX_NONE),
+      LexType.LEX_INDENT  :  StateValue(LexType.LEX_NULL, LexType.LEX_NONE),
+      LexType.LEX_NLINE :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
+      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
+      LexType.LEX_EOL     :  StateValue(LexType.LEX_NULL, LexType.LEX_NONE)
     ];
 
     return _lex_table;
@@ -207,7 +209,7 @@ class Lexer
   public Token[] get_tokens()
   {
     // Состояние автомата
-    StateValue state =  StateValue("0", "0", "start");
+    StateValue state =  StateValue(LexType.LEX_NONE, LexType.LEX_NONE, LexType.LEX_START);
     DecodedSymbol symbol;
     Token plex;
 
@@ -233,11 +235,11 @@ class Lexer
       state =  this.lex_table[state.curr_state][symbol.sym_class];
 
       // если состояние привело к результату, т.е. составлена полная лексема
-      if(state.res != "0") 
+      if(state.res != LexType.LEX_NONE) 
       {
         plex =  Token(0, state.res, slice);
         this.result ~= plex;
-        state = StateValue("0", "0", "start");
+        state = StateValue(LexType.LEX_NONE, LexType.LEX_NONE, LexType.LEX_START);
 
         // продолжаем обход строки с той же позиции
         if(stay_at_curr_sym) {
@@ -250,7 +252,7 @@ class Lexer
       }
       else 
       {
-        state = StateValue("0", "0", state.next_state);
+        state = StateValue(LexType.LEX_NONE, LexType.LEX_NONE, state.next_state);
         stay_at_curr_sym = true;
         slice ~= symbol.value;
       }
@@ -262,7 +264,7 @@ class Lexer
 
       prev_str_size = to!int(input_text.length);
       
-      if(symbol.value == "EOL") break;
+      if(symbol.sym_class == LexType.LEX_EOL) break;
     }
 
     return this.result;

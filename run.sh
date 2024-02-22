@@ -4,9 +4,9 @@ echo "Compiling..."
 
 cd "build"
 
-dmd "../src/main.d"
+dmd "../src/main.d" "../src/lexer.d"
 
-cd ..
-cd "test"
+# cd ..
+# cd "test"
 
-firefox file.pdf
+# firefox file.pdf
