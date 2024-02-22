@@ -4,6 +4,19 @@ import std.regex : matchFirst;
 import std.conv : to;
 import std.utf : decodeFront;
 
+enum States {
+  START,
+  NUMBER,
+  STR,
+  OP,
+  SPECIAL,
+  INLINE,
+  INDENT,
+  NEWLINE,
+  NULL,
+  EOL
+}
+
 /**
  * pair consisting of a token name and an optional attribute value. 
  * The token name is an abstract symbol representing a kind of lexical unit, 
@@ -102,7 +115,6 @@ class Lexer
 
     _lex_table["start"] = 
     [
-      "number"  :  StateValue("0", "number"),
       "name"    :  StateValue("0", "name"),
       "op"      :  StateValue("0", "op"),
       "special" :  StateValue("0", "special"),
@@ -110,17 +122,6 @@ class Lexer
       "newline" :  StateValue("0", "newline"),
       "null"    :  StateValue("0", "null"),
       "EOL"     :  StateValue("EOL", "0")
-    ];
-    _lex_table["number"] = 
-    [
-      "number"  :  StateValue("0", "number"),
-      "name"    :  StateValue("0", "null"),
-      "op"      :  StateValue("number", "0"),
-      "special" :  StateValue("number", "0"),
-      "indent"  :  StateValue("number", "0"),
-      "newline" :  StateValue("number", "0"),
-      "null"    :  StateValue("0", "null"),
-      "EOL"     :  StateValue("number", "0")
     ];
     _lex_table["name"] = 
     [
@@ -210,24 +211,17 @@ class Lexer
     DecodedSymbol symbol;
     Token plex;
 
-    // копия изначального текста (для цикла, т.к. во время цикла меняется изначальная строка)
     string cpy_str = input_text.dup;
 
-    // удаление декодированого символа иногда может означать удаление как бы нескольких символов (размер некоторых символов > 1)
-    // поэтому следим за размером символов
-    int offset = 0;
-    int prev_size = to!int(input_text.length);
-
-    // Считаем
+    int curr_symbol_size = 0;
+    int prev_str_size = to!int(input_text.length);
     int count_removes = 0;
 
     // копим считанные символы
     string slice = "";
 
-    // Сдвиг назад при переходе состояний автомата, чтобы остаться на символе
-    bool shift = true;
+    bool stay_at_curr_sym = true;
 
-    // for(int i = 0; i <= (cpy_str.length - 2); i++)
     while(count_removes<=cpy_str.length)
     {
       // decodeFront() берёт по одному символу из строки слева направо, декодирует с УТФ-8 и удаляет его из строки
@@ -246,28 +240,28 @@ class Lexer
         state = StateValue("0", "0", "start");
 
         // продолжаем обход строки с той же позиции
-        if(shift) {
+        if(stay_at_curr_sym) {
           symbol.value ~= input_text;
           input_text = symbol.value;
         }
 
         slice = "";
-        shift = false;
+        stay_at_curr_sym = false;
       }
       else 
       {
         state = StateValue("0", "0", state.next_state);
-        shift = true;
+        stay_at_curr_sym = true;
         slice ~= symbol.value;
       }
 
-      offset =  prev_size - to!int(input_text.length); 
-      count_removes+=offset;
+      // удаление декодированого символа иногда может означать удаление как бы нескольких символов (размер некоторых символов > 1)
+      // поэтому следим за размером символов
+      curr_symbol_size = prev_str_size - to!int(input_text.length); 
+      count_removes+=curr_symbol_size;
 
-      // запоминаем размер до удаления
-      prev_size = to!int(input_text.length);
+      prev_str_size = to!int(input_text.length);
       
-      // если End Of Life конец файла
       if(symbol.value == "EOL") break;
     }
 
