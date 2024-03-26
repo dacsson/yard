@@ -5,21 +5,44 @@ import std.regex : matchFirst;
 import std.conv : to;
 import std.utf : decodeFront;
 
-enum StateType {
+alias NAS = STATES.S_NONE;    // NOT A STATE
+alias NAL = LEXEMS.LEX_NONE;  // NOT A LEXEM
+
+// продолжить в том же состоянии автомата без "регистрации" токена в файле
+StateValue _ret_self_state_RV(STATES _state_type) { return StateValue(NAL, _state_type); }
+// вернуть "построенный" токен с переходом в старотовое состояние для чтения нового токена
+StateValue _ret_resolved_lex_LV(LEXEMS _lex_type) { return StateValue(_lex_type, STATES.S_START); }
+// вернуть "построенный" токен с переходом в другое состояние
+StateValue _ret_lex_and_goto_state(LEXEMS _lex_type, STATES _state_type) { return StateValue(_lex_type, _state_type); }
+
+enum STATES {
+  S_START       ,
   S_NONE        ,
-  S_SEEN_VARDEF ,  // ожидаем зачение переменной
+  S_DEF_VAR     ,  // декларация переменной
+  S_SEEN_VARDEF ,  // ожидаем имя переменной
+  S_READ_VARVAL ,  // ожидаем значение переменной
+  S_READ_CMDVAL ,
+  S_SEEN_EOL    ,
+  S_INDENT_AFTER_CMD,
+  S_INDENT_AFTER_VAR,  // пробел после переменной,
+  S_NLINE_AFTER_VAL,   // ентер после значение переменной
+  S_NLINE_AFTER_CMD,
+  S_SEEN_INDENT,
+  S_DEF_CMD     , // декларация команды
+  S_SEEN_CMDDEF , // ожидаем имя команды
+  S_SEEN_FREE_STR,  // текст без команд и переменных
 }
 
-enum LexType {
+enum LEXEMS {
   LEX_NONE    ,   // нет лексемы или ошибка декларации
   LEX_START   ,
-  LEX_NUM     ,
   LEX_STR     ,
   LEX_VARVAL  ,   // значение переменной
   LEX_IDENT   ,
   // LEX_OP      , => deprecated, разбиваем это на ДОСТУПНЫЕ операции :
   LEX_DEFVAR  ,   // "!" - декларация переменной
   LEX_DEFCMD  ,   // "\" - декларация начала команды
+  LEX_CMDVAL  ,
   LEX_DEFCMEND,   // "/" - декларация конца команды
   LEX_DEFGRP  ,   // "\n после тэга" - декларация начала группы 
   LEX_DEFGREND,   // "\n после заполнения тэга" - декларация конца группы
@@ -28,7 +51,7 @@ enum LexType {
   LEX_INDENT  ,
   LEX_NLINE   ,
   LEX_NULL    ,
-  LEX_EOL
+  LEX_EOL     
 }
 
 /**
@@ -40,12 +63,12 @@ enum LexType {
 struct Token 
 {
   uint id;
-  LexType type;
+  LEXEMS type;
   string value;
   // на какой строк в исходном файле находится
   uint at_line;
 
-  this(uint id, LexType type, string value, uint at_line)
+  this(uint id, LEXEMS type, string value, uint at_line)
   {
     this.id = id;
     this.type = type;
@@ -61,13 +84,13 @@ struct Token
 struct StateValue
 {
   // функция выхода
-  LexType res;
+  LEXEMS res;
   // функция перехода
-  LexType next_state;
+  STATES next_state;
   // нынешнее состояние
-  LexType curr_state;
+  STATES curr_state;
 
-  this(LexType res, LexType next_state, LexType curr_state = LexType.LEX_NONE)
+  this(LEXEMS res, STATES next_state, STATES curr_state = STATES.S_NONE)
   {
     this.res = res;
     this.next_state = next_state;
@@ -82,7 +105,7 @@ struct StateValue
 class DecodedSymbol
 {
   string value;
-  LexType sym_class;
+  LEXEMS sym_class;
 
   this(string value = "")
   {
@@ -105,19 +128,19 @@ class DecodedSymbol
     LEX_DEFGRP  ,   // "\n после тэга" - декларация начала группы 
     LEX_DEFGREND,   // "\n после заполнения тэга" - декларация конца группы
   */
-  private LexType get_symbol_class(string sym)
+  private LEXEMS get_symbol_class(string sym)
   {
-    if (sym == "EOL") return LexType.LEX_EOL;
-    else if (!matchFirst(sym, `^\d+$`).empty()) return LexType.LEX_NUM;
-    else if (!matchFirst(sym, `[\p{Cyrillic}+|\p{L}+]`).empty()) return LexType.LEX_STR;
-    // else if (!matchFirst(sym, `[!\\()]`).empty()) return LexType.LEX_OP; 
-    else if (sym == "!") return LexType.LEX_DEFVAR;
-    else if (sym == "\\") return LexType.LEX_DEFCMD;
-    else if (sym == "/") return LexType.LEX_DEFCMEND;
-    else if (sym == " ") return LexType.LEX_INDENT;
-    else if (!matchFirst(sym, `\n`).empty()) return LexType.LEX_NLINE;
-    else if (!matchFirst(sym, `\r`).empty()) return LexType.LEX_SPECIAL;
-    else return LexType.LEX_NULL;
+    if (sym == "EOL") return LEXEMS.LEX_EOL;
+    else if (!matchFirst(sym, `^\d+$`).empty()) return LEXEMS.LEX_STR;
+    else if (!matchFirst(sym, `[\p{Cyrillic}+|\p{L}+]`).empty()) return LEXEMS.LEX_STR;
+    // else if (!matchFirst(sym, `[!\\()]`).empty()) return LEXEMS.LEX_OP; 
+    else if (sym == "!") return LEXEMS.LEX_DEFVAR;
+    else if (sym == "\\") return LEXEMS.LEX_DEFCMD;
+    else if (sym == "/") return LEXEMS.LEX_DEFCMEND;
+    else if (sym == " ") return LEXEMS.LEX_INDENT;
+    else if (!matchFirst(sym, `\n`).empty()) return LEXEMS.LEX_NLINE;
+    else if (!matchFirst(sym, `\r`).empty()) return LEXEMS.LEX_SPECIAL;
+    else return LEXEMS.LEX_NULL;
   }
 }
 
@@ -134,177 +157,78 @@ class Lexer
   string input_text;
   Token[] result;
   StateValue[][] lex_table = [
-    LexType.LEX_START :
-    [
-      LexType.LEX_STR     :   StateValue(LexType.LEX_NONE, LexType.LEX_STR),
-      // LexType.LEX_OP      :  StateValue(LexType.LEX_NONE, LexType.LEX_OP),
-      LexType.LEX_DEFVAR  :   StateValue(LexType.LEX_NONE, LexType.LEX_DEFVAR),
-      LexType.LEX_DEFGRP  :   StateValue(LexType.LEX_NONE, LexType.LEX_DEFGRP),
-      LexType.LEX_DEFGREND :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFGREND),
-      LexType.LEX_DEFCMD  :   StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMD),
-      LexType.LEX_DEFCMEND :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMEND),
-      LexType.LEX_SPECIAL :   StateValue(LexType.LEX_NONE, LexType.LEX_SPECIAL),
-      LexType.LEX_INDENT  :   StateValue(LexType.LEX_NONE, LexType.LEX_INDENT),
-      LexType.LEX_NLINE   :   StateValue(LexType.LEX_NONE, LexType.LEX_NLINE),
-      LexType.LEX_NULL    :   StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      LexType.LEX_EOL     :   StateValue(LexType.LEX_EOL, LexType.LEX_NONE)
+    STATES.S_START : [
+      LEXEMS.LEX_STR     :   _ret_self_state_RV(STATES.S_DEF_VAR),
+      LEXEMS.LEX_DEFVAR  :   _ret_self_state_RV(STATES.S_DEF_VAR),
+      LEXEMS.LEX_INDENT : _ret_self_state_RV(STATES.S_SEEN_INDENT),
+      LEXEMS.LEX_DEFCMD : _ret_self_state_RV(STATES.S_SEEN_CMDDEF),
+      LEXEMS.LEX_EOL : _ret_resolved_lex_LV(LEXEMS.LEX_EOL),
     ],
-    LexType.LEX_STR :
-    [
-      LexType.LEX_NUM     :  StateValue(LexType.LEX_NONE, LexType.LEX_STR),
-      LexType.LEX_STR     :  StateValue(LexType.LEX_NONE, LexType.LEX_STR),
-      // LexType.LEX_OP      :  StateValue(LexType.LEX_STR, LexType.LEX_NONE),
-      LexType.LEX_DEFVAR  :   StateValue(LexType.LEX_NONE, LexType.LEX_STR),
-      LexType.LEX_DEFGRP  :   StateValue(LexType.LEX_NONE, LexType.LEX_STR),
-      LexType.LEX_DEFGREND :  StateValue(LexType.LEX_NONE, LexType.LEX_STR),
-      LexType.LEX_DEFCMD  :  StateValue(LexType.LEX_NONE, LexType.LEX_STR),
-      LexType.LEX_DEFCMEND : StateValue(LexType.LEX_STR, LexType.LEX_NONE),
-      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_STR, LexType.LEX_NONE),
-      LexType.LEX_INDENT  :  StateValue(LexType.LEX_NONE, LexType.LEX_STR),
-      LexType.LEX_NLINE   :  StateValue(LexType.LEX_NONE, LexType.LEX_STR),
-      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      LexType.LEX_EOL     :  StateValue(LexType.LEX_STR, LexType.LEX_NONE)
+    STATES.S_DEF_VAR : [
+      LEXEMS.LEX_STR     :   _ret_self_state_RV(STATES.S_DEF_VAR),
+      LEXEMS.LEX_DEFVAR  :   _ret_self_state_RV(STATES.S_DEF_VAR),
+      LEXEMS.LEX_INDENT  :   _ret_lex_and_goto_state(LEXEMS.LEX_DEFVAR, STATES.S_INDENT_AFTER_VAR),
+      LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_DEFVAR)
     ],
-    LexType.LEX_DEFVAR : [
-      LexType.LEX_NUM     :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFVAR),
-      LexType.LEX_STR     :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFVAR),
-      LexType.LEX_DEFVAR  :   StateValue(LexType.LEX_NONE, LexType.LEX_DEFVAR),   // какаято хуета
-      LexType.LEX_DEFGRP  :   StateValue(LexType.LEX_DEFVAR, LexType.LEX_NONE), // какаято хуета
-      LexType.LEX_DEFGREND :  StateValue(LexType.LEX_DEFVAR, LexType.LEX_NONE), // какаято хуета
-      LexType.LEX_DEFCMD  :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFVAR),
-      LexType.LEX_DEFCMEND : StateValue(LexType.LEX_NONE, LexType.LEX_DEFVAR),
-      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFVAR),
-      LexType.LEX_INDENT  :  StateValue(LexType.LEX_DEFVAR, LexType.LEX_NONE), // если пробел то ждём текста
-      LexType.LEX_NLINE   :  StateValue(LexType.LEX_DEFVAR, LexType.LEX_NONE), // и тут тоже ждём текста
-      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      LexType.LEX_EOL     :  StateValue(LexType.LEX_DEFVAR, LexType.LEX_NONE)      
+    STATES.S_SEEN_INDENT : [
+      LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_INDENT)
     ],
-    LexType.LEX_VARVAL : [
-      LexType.LEX_NUM     :  StateValue(LexType.LEX_NONE, LexType.LEX_VARVAL),
-      LexType.LEX_STR     :  StateValue(LexType.LEX_NONE, LexType.LEX_VARVAL),
-      LexType.LEX_DEFVAR  :   StateValue(LexType.LEX_NONE, LexType.LEX_VARVAL),   
-      LexType.LEX_DEFGRP  :   StateValue(LexType.LEX_NONE, LexType.LEX_VARVAL), 
-      LexType.LEX_DEFGREND :  StateValue(LexType.LEX_NONE, LexType.LEX_VARVAL), 
-      LexType.LEX_DEFCMD  :  StateValue(LexType.LEX_NONE, LexType.LEX_VARVAL),
-      LexType.LEX_DEFCMEND : StateValue(LexType.LEX_NONE, LexType.LEX_VARVAL),
-      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_NONE, LexType.LEX_VARVAL),
-      LexType.LEX_INDENT  :  StateValue(LexType.LEX_NONE, LexType.LEX_VARVAL), 
-      LexType.LEX_NLINE   :  StateValue(LexType.LEX_DEFVAR, LexType.LEX_NONE), 
-      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      LexType.LEX_EOL     :  StateValue(LexType.LEX_VARVAL, LexType.LEX_NONE)   
+    STATES.S_INDENT_AFTER_VAR : [
+      LEXEMS.LEX_STR     :   _ret_self_state_RV(STATES.S_READ_VARVAL),
+      LEXEMS.LEX_INDENT  :   _ret_lex_and_goto_state(LEXEMS.LEX_INDENT, STATES.S_READ_VARVAL),
+      LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_DEFVAR)
     ],
-    LexType.LEX_DEFGRP : [
-
+    STATES.S_READ_VARVAL : [
+      LEXEMS.LEX_STR      :   _ret_self_state_RV(STATES.S_READ_VARVAL),
+      LEXEMS.LEX_INDENT   :    _ret_self_state_RV(STATES.S_READ_VARVAL),
+      LEXEMS.LEX_NLINE     :   _ret_lex_and_goto_state(LEXEMS.LEX_VARVAL, STATES.S_NLINE_AFTER_VAL),
+      LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_VARVAL)
     ],
-    LexType.LEX_DEFGREND : [
-
+    STATES.S_NLINE_AFTER_VAL : [
+      LEXEMS.LEX_DEFVAR : _ret_lex_and_goto_state(LEXEMS.LEX_NLINE, STATES.S_DEF_VAR),
+      LEXEMS.LEX_NLINE : _ret_self_state_RV(STATES.S_NLINE_AFTER_VAL),
+      LEXEMS.LEX_DEFCMD  :   _ret_lex_and_goto_state(LEXEMS.LEX_NLINE, STATES.S_SEEN_CMDDEF),
+      LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_NLINE)
     ],
-    LexType.LEX_DEFCMD : [
-      LexType.LEX_NUM     :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMD),
-      LexType.LEX_STR     :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMD),
-      LexType.LEX_DEFVAR  :   StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMD),   // какаято хуета
-      LexType.LEX_DEFGRP  :   StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE), // какаято хуета
-      LexType.LEX_DEFGREND :  StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE), // какаято хуета
-      LexType.LEX_DEFCMD  :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMD),
-      LexType.LEX_DEFCMEND : StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE),
-      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMD),
-      LexType.LEX_INDENT  :  StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE), // если пробел то ждём текста
-      LexType.LEX_NLINE   :  StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE), // и тут тоже ждём текста
-      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      LexType.LEX_EOL     :  StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE)         
+    STATES.S_SEEN_CMDDEF : [
+      LEXEMS.LEX_STR     :   _ret_self_state_RV(STATES.S_SEEN_CMDDEF),
+      LEXEMS.LEX_DEFVAR  :   _ret_self_state_RV(STATES.S_SEEN_CMDDEF),
+      LEXEMS.LEX_INDENT  :   _ret_lex_and_goto_state(LEXEMS.LEX_INDENT, STATES.S_DEF_CMD),
+      LEXEMS.LEX_NLINE   :   _ret_lex_and_goto_state(LEXEMS.LEX_INDENT, STATES.S_DEF_CMD),
+      LEXEMS.LEX_DEFCMD  :   _ret_self_state_RV(STATES.S_DEF_CMD),
+      LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_NONE)
     ],
-    LexType.LEX_DEFCMEND : [
-      LexType.LEX_NUM     :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMD),
-      LexType.LEX_STR     :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMD),
-      LexType.LEX_DEFVAR  :   StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMD),   // какаято хуета
-      LexType.LEX_DEFGRP  :   StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE), // какаято хуета
-      LexType.LEX_DEFGREND :  StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE), // какаято хуета
-      LexType.LEX_DEFCMD  :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMD),
-      LexType.LEX_DEFCMEND : StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE),
-      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFCMD),
-      LexType.LEX_INDENT  :  StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE), // если пробел то ждём текста
-      LexType.LEX_NLINE   :  StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE), // и тут тоже ждём текста
-      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      LexType.LEX_EOL     :  StateValue(LexType.LEX_DEFCMD, LexType.LEX_NONE)         
+    STATES.S_DEF_CMD : [
+      LEXEMS.LEX_STR     :   _ret_self_state_RV(STATES.S_DEF_CMD),
+      LEXEMS.LEX_DEFVAR  :   _ret_self_state_RV(STATES.S_DEF_CMD),
+      LEXEMS.LEX_INDENT  :   _ret_lex_and_goto_state(LEXEMS.LEX_DEFCMD, STATES.S_INDENT_AFTER_CMD),
+      LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_DEFVAR)      
     ],
-    // LexType.LEX_OP :
-    // [
-    //   LexType.LEX_NUM  :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
-    //   LexType.LEX_STR    :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
-    //   // LexType.LEX_OP      :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
-    //   LexType.LEX_DEFVAR  :   StateValue(LexType.LEX_NONE, LexType.LEX_STR),
-    //   LexType.LEX_DEFGRP  :   StateValue(LexType.LEX_NONE, LexType.LEX_DEFGRP),
-    //   LexType.LEX_DEFGREND :  StateValue(LexType.LEX_NONE, LexType.LEX_DEFGREND),
-    //   LexType.LEX_DEFCMD  :  StateValue(LexType.LEX_NONE, LexType.LEX_STR),
-    //   LexType.LEX_DEFCMEND : StateValue(LexType.LEX_STR, LexType.LEX_NONE),      
-    //   LexType.LEX_SPECIAL :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
-    //   LexType.LEX_INDENT  :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
-    //   LexType.LEX_NLINE :  StateValue(LexType.LEX_OP, LexType.LEX_NONE),
-    //   LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-    //   LexType.LEX_EOL     :  StateValue(LexType.LEX_OP, LexType.LEX_NONE)
-    // ],
-    // LexType.LEX_SPECIAL :
-    // [
-    //   LexType.LEX_NUM     :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
-    //   LexType.LEX_STR     :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
-    //   // LexType.LEX_OP      :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
-    //   LexType.LEX_DEFVAR  :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
-    //   LexType.LEX_SPECIAL :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
-    //   LexType.LEX_INDENT  :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
-    //   LexType.LEX_NLINE   :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE),
-    //   LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-    //   LexType.LEX_EOL     :  StateValue(LexType.LEX_SPECIAL, LexType.LEX_NONE)
-    // ],
-    LexType.LEX_INDENT :
-    [
-      LexType.LEX_NUM     :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
-      LexType.LEX_STR     :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
-      // LexType.LEX_OP      :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
-      LexType.LEX_DEFVAR  :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
-      LexType.LEX_DEFGRP  :   StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
-      LexType.LEX_DEFGREND :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
-      LexType.LEX_DEFCMD  :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
-      LexType.LEX_DEFCMEND : StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
-      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
-      LexType.LEX_INDENT  :  StateValue(LexType.LEX_NONE, LexType.LEX_INDENT),
-      LexType.LEX_NLINE   :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE),
-      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      LexType.LEX_EOL     :  StateValue(LexType.LEX_INDENT, LexType.LEX_NONE)
+    STATES.S_INDENT_AFTER_CMD : [
+      LEXEMS.LEX_STR     :   _ret_self_state_RV(STATES.S_READ_CMDVAL),
+      LEXEMS.LEX_INDENT  :   _ret_lex_and_goto_state(LEXEMS.LEX_INDENT, STATES.S_READ_CMDVAL),
+      LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_EOL)
     ],
-    LexType.LEX_NLINE :
-    [
-      LexType.LEX_NUM  :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
-      LexType.LEX_STR    :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
-      // LexType.LEX_OP      :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
-      LexType.LEX_DEFVAR  :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
-      LexType.LEX_DEFGRP  :   StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
-      LexType.LEX_DEFGREND :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
-      LexType.LEX_DEFCMD  :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
-      LexType.LEX_DEFCMEND : StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
-      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
-      LexType.LEX_INDENT  :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
-      LexType.LEX_NLINE :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE),
-      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      LexType.LEX_EOL     :  StateValue(LexType.LEX_NLINE, LexType.LEX_NONE)
+    STATES.S_READ_CMDVAL : [
+      LEXEMS.LEX_STR      :   _ret_self_state_RV(STATES.S_READ_CMDVAL),
+      LEXEMS.LEX_INDENT   :    _ret_self_state_RV(STATES.S_READ_CMDVAL),
+      LEXEMS.LEX_NLINE     :   _ret_lex_and_goto_state(LEXEMS.LEX_CMDVAL, STATES.S_NLINE_AFTER_CMD),
+      LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_CMDVAL)      
     ],
-    LexType.LEX_NULL :
-    [
-      LexType.LEX_NUM     :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      LexType.LEX_STR     :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      // LexType.LEX_OP      :  StateValue(LexType.LEX_NULL, LexType.LEX_NONE),
-      LexType.LEX_DEFVAR  :  StateValue(LexType.LEX_NULL, LexType.LEX_NONE),
-      LexType.LEX_DEFGRP  :   StateValue(LexType.LEX_NULL, LexType.LEX_NONE),
-      LexType.LEX_DEFGREND :  StateValue(LexType.LEX_NULL, LexType.LEX_NONE),
-      LexType.LEX_DEFCMD  :  StateValue(LexType.LEX_NULL, LexType.LEX_NONE),
-      LexType.LEX_DEFCMEND : StateValue(LexType.LEX_NULL, LexType.LEX_NONE),
-      LexType.LEX_SPECIAL :  StateValue(LexType.LEX_NULL, LexType.LEX_NONE),
-      LexType.LEX_INDENT  :  StateValue(LexType.LEX_NULL, LexType.LEX_NONE),
-      LexType.LEX_NLINE   :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      LexType.LEX_NULL    :  StateValue(LexType.LEX_NONE, LexType.LEX_NULL),
-      LexType.LEX_EOL     :  StateValue(LexType.LEX_NULL, LexType.LEX_NONE)
+    STATES.S_NLINE_AFTER_CMD : [
+      LEXEMS.LEX_STR      : _ret_lex_and_goto_state(LEXEMS.LEX_NLINE, STATES.S_SEEN_FREE_STR),
+      LEXEMS.LEX_NLINE : _ret_self_state_RV(STATES.S_NLINE_AFTER_CMD),
+      LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_NLINE)      
+    ],
+    STATES.S_SEEN_FREE_STR : [
+      LEXEMS.LEX_STR : _ret_self_state_RV(STATES.S_SEEN_FREE_STR),
+      LEXEMS.LEX_INDENT : _ret_self_state_RV(STATES.S_SEEN_FREE_STR),
+      LEXEMS.LEX_NLINE : _ret_self_state_RV(STATES.S_SEEN_FREE_STR),
+      LEXEMS.LEX_DEFCMD : _ret_lex_and_goto_state(LEXEMS.LEX_STR, STATES.S_SEEN_CMDDEF),
+      LEXEMS.LEX_EOL : _ret_resolved_lex_LV(LEXEMS.LEX_STR)
     ]
-  ]; 
-
+  ];
+ 
   this(string input_text)
   {
     this.input_text = input_text;
@@ -318,7 +242,7 @@ class Lexer
   public Token[] get_tokens()
   {
     // Состояние автомата
-    StateValue state =  StateValue(LexType.LEX_NONE, LexType.LEX_NONE, LexType.LEX_START);
+    StateValue state =  StateValue(LEXEMS.LEX_NONE, STATES.S_NONE, STATES.S_START);
     DecodedSymbol symbol;
     Token plex;
 
@@ -339,15 +263,16 @@ class Lexer
         (count_removes == cpy_str.length) ? "EOL" : to!string(input_text.decodeFront())
       );
 
+      writef("%d - %d - %d : %s\n", state.curr_state, state.next_state, symbol.sym_class,symbol.value);
       // переход в новое состояние
       state =  this.lex_table[state.curr_state][symbol.sym_class];
 
       // если состояние привело к результату, т.е. составлена полная лексема
-      if(state.res != LexType.LEX_NONE) 
+      if(state.res != LEXEMS.LEX_NONE) 
       {
         plex =  Token(0, state.res, slice, 0);
         this.result ~= plex;
-        state = StateValue(LexType.LEX_NONE, LexType.LEX_NONE, LexType.LEX_START);
+        state = StateValue(LEXEMS.LEX_NONE, STATES.S_NONE, state.next_state);
 
         // продолжаем обход строки с той же позиции
         if(stay_at_curr_sym) {
@@ -360,7 +285,7 @@ class Lexer
       }
       else 
       {
-        state = StateValue(LexType.LEX_NONE, LexType.LEX_NONE, state.next_state);
+        state = StateValue(LEXEMS.LEX_NONE, STATES.S_NONE, state.next_state);
         stay_at_curr_sym = true;
         slice ~= symbol.value;
       }
@@ -371,7 +296,7 @@ class Lexer
 
       prev_str_size = to!int(input_text.length);
       
-      if(symbol.sym_class == LexType.LEX_EOL) break;
+      if(symbol.sym_class == LEXEMS.LEX_EOL) break;
     }
 
     return this.result;
