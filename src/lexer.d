@@ -73,10 +73,10 @@ class DecodedSymbol
     if (sym == "EOL") return LEXEMS.LEX_EOL;
     else if (!matchFirst(sym, `^\d+$`).empty()) return LEXEMS.LEX_STR;
     else if (!matchFirst(sym, `[\p{Cyrillic}+|\p{L}+]`).empty()) return LEXEMS.LEX_STR;
+    else if (!matchFirst(sym, `^\p{L}+$`).empty()) return LEXEMS.LEX_STR;
     // else if (!matchFirst(sym, `[!\\()]`).empty()) return LEXEMS.LEX_OP; 
     else if (sym == "!") return LEXEMS.LEX_DEFVAR;
     else if (sym == "\\") return LEXEMS.LEX_DEFCMD;
-    else if (sym == "/") return LEXEMS.LEX_DEFCMEND;
     else if (sym == " ") return LEXEMS.LEX_INDENT;
     else if (!matchFirst(sym, `\n`).empty()) return LEXEMS.LEX_NLINE;
     else if (!matchFirst(sym, `\r`).empty()) return LEXEMS.LEX_SPECIAL;
@@ -122,6 +122,7 @@ class Lexer
       LEXEMS.LEX_STR      :   _ret_self_state_RV(STATES.S_READ_VARVAL),
       LEXEMS.LEX_INDENT   :    _ret_self_state_RV(STATES.S_READ_VARVAL),
       LEXEMS.LEX_NLINE     :   _ret_lex_and_goto_state(LEXEMS.LEX_VARVAL, STATES.S_NLINE_AFTER_VAL),
+      LEXEMS.LEX_NULL     : _ret_self_state_RV(STATES.S_READ_VARVAL),
       LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_VARVAL)
     ],
     STATES.S_NLINE_AFTER_VAL : [
@@ -153,10 +154,13 @@ class Lexer
       LEXEMS.LEX_STR      :   _ret_self_state_RV(STATES.S_READ_CMDVAL),
       LEXEMS.LEX_INDENT   :    _ret_self_state_RV(STATES.S_READ_CMDVAL),
       LEXEMS.LEX_NLINE     :   _ret_lex_and_goto_state(LEXEMS.LEX_CMDVAL, STATES.S_NLINE_AFTER_CMD),
+      LEXEMS.LEX_NULL     :  _ret_self_state_RV(STATES.S_READ_CMDVAL),
       LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_CMDVAL)      
     ],
     STATES.S_NLINE_AFTER_CMD : [
       LEXEMS.LEX_STR      : _ret_lex_and_goto_state(LEXEMS.LEX_NLINE, STATES.S_SEEN_FREE_STR),
+      LEXEMS.LEX_DEFCMD : _ret_lex_and_goto_state(LEXEMS.LEX_NLINE, STATES.S_SEEN_CMDDEF),
+      LEXEMS.LEX_INDENT : _ret_self_state_RV(STATES.S_NLINE_AFTER_CMD),
       LEXEMS.LEX_NLINE : _ret_self_state_RV(STATES.S_NLINE_AFTER_CMD),
       LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_NLINE)      
     ],
@@ -203,7 +207,7 @@ class Lexer
         (count_removes == cpy_str.length) ? "EOL" : to!string(input_text.decodeFront())
       );
 
-      // writef("%d - %d - %d : %s\n", state.curr_state, state.next_state, symbol.sym_class,symbol.value);
+      // writef("%s - %s - %s : %s\n", state.curr_state, state.next_state, symbol.sym_class,symbol.value);
       // переход в новое состояние
       state =  this.lex_table[state.curr_state][symbol.sym_class];
 

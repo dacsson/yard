@@ -14,26 +14,32 @@ import yard.constructors.latex_constr;
 
 int main(string[] args)
 {
-  string content = readText("../test/hello.yard");
+  // "/home/thephoneoff/MyProjects/yard/test/simple.yard"
+  string content = readText(args[1]);
 
   Lexer lexer = new Lexer(content);
   Token[] plexs = lexer.get_tokens();
 
+  // foreach (Token key; plexs)
+  // {
+  //   writef("%s\t%s\n", key.type, key.value);
+  // }
+
   Parser parser = new Parser(plexs);
   Yrd_tree parse_tree = parser.parse();
 
-  switch(args[1])
+  switch(args[2])
   {
     case "html": {
       Html_Constr html = new Html_Constr();
       string html_output = html.build(parse_tree);
-      writef("%s\n", html_output);
-      html.create_file("../test/temp.html");
+      // writef("%s\n", html_output);
+      html.create_file("/home/thephoneoff/MyProjects/yard/test/temp.html");
     } break;
     case "latex": {
       Latex_Constr latex = new Latex_Constr();
       string latex_output = latex.build(parse_tree);
-      writef("%s\n", latex_output);
+      // writef("%s\n", latex_output);
       latex.create_file("../test/temp.tex");
     } break;
     default: break;
