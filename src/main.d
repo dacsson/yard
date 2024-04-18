@@ -9,8 +9,11 @@ import yard.parser;
 import yard.utils.yrd_types;
 import yard.utils.yrd_tree;
 
-import yard.constructors.html_constr;
-import yard.constructors.latex_constr;
+import yard.builders.html_builder;
+import yard.builders.latex_builder;
+import yard.builders.pdf_builder;
+
+// import libharu_topdf;
 
 int main(string[] args)
 {
@@ -31,16 +34,22 @@ int main(string[] args)
   switch(args[2])
   {
     case "html": {
-      Html_Constr html = new Html_Constr();
-      string html_output = html.build(parse_tree);
-      // writef("%s\n", html_output);
-      html.create_file("/home/thephoneoff/MyProjects/yard/test/temp.html");
+      // Html_ html = new Html_Constr();
+      // string html_output = html.build(parse_tree);
+      // // writef("%s\n", html_output);
+      // html.create_file("/home/thephoneoff/MyProjects/yard/test/temp.html");
     } break;
     case "latex": {
-      Latex_Constr latex = new Latex_Constr();
-      string latex_output = latex.build(parse_tree);
-      // writef("%s\n", latex_output);
-      latex.create_file("../test/temp.tex");
+      // Latex_Constr latex = new Latex_Constr();
+      // string latex_output = latex.build(parse_tree);
+      // // writef("%s\n", latex_output);
+      // latex.create_file("../test/temp.tex");
+    } break;
+    case "pdf": {
+      PDF_Builder pdf = new PDF_Builder();
+      string pdf_output = pdf.build(parse_tree);
+      writef("pdf:\n%s\n", pdf_output);
+      pdf.create_file("../test/temp.pdf");
     } break;
     default: break;
   }

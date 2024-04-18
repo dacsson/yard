@@ -1,6 +1,6 @@
-module yard.constructors.html_constr;
+module yard.builders.html_builder;
 
-import yard.constructors.constructor;
+import yard.builders.builder;
 import yard.utils.yrd_tree;
 import yard.utils.yrd_types;
 
@@ -15,7 +15,7 @@ import std.array : appender;
 import std.base64 : Base64;
 import std.conv;
 
-class Html_Constr : IConstructor
+class Html_Builder : IBuilder
 {
   string content;
   bool isTitlePresent = false;

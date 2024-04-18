@@ -1,8 +1,8 @@
-module yard.constructors.constructor;
+module yard.builders.builder;
 
 import yard.utils.yrd_tree;
 
-interface IConstructor
+interface IBuilder
 {
   private string set_variables(string var_name, string var_value);
 

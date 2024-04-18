@@ -1,12 +1,12 @@
-module yard.constructors.latex_constr;
+module yard.builders.latex_builder;
 
-import yard.constructors.constructor;
+import yard.builders.builder;
 import yard.utils.yrd_tree;
 import yard.utils.yrd_types;
 
 import std.file;
 
-class Latex_Constr : IConstructor
+class Latex_Constr : IBuilder
 {
   string content;
 
