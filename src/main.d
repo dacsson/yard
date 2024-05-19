@@ -8,6 +8,7 @@ import yard.parser;
 
 import yard.utils.yrd_types;
 import yard.utils.yrd_tree;
+import yard.utils.yrd_ttf;
 
 import yard.builders.html_builder;
 import yard.builders.latex_builder;
@@ -48,10 +49,31 @@ int main(string[] args)
     case "pdf": {
       PDF_Builder pdf = new PDF_Builder();
       string pdf_output = pdf.build(parse_tree);
-      writef("pdf:\n%s\n", pdf_output);
-      pdf.create_file("../test/temp.pdf");
+      // writef("pdf:\n%s\n", pdf_output);
+      pdf.create_file("../test/new.pdf");
     } break;
-    default: break;
+    default: {
+      // import std.file : write, read;
+      // import std.string : indexOf;
+      string font_path = "/System/Library/Fonts/Supplemental/Times New Roman.ttf";
+      TTF ttf = new TTF(font_path);
+      int h = ttf.htmx.h_metrics[618].advance_width;
+      writef("\nw for %d => %d\n", 618, h);
+      ttf.find_glyph_width('П');
+      // cmap.read_hhea_table()
+      // string[string][] char_glyph_table = cmap.char_glyph_table;
+      // for(int i = 0; i < char_glyph_table.length; i++) {
+      //   foreach (key, value; char_glyph_table[i])
+      //   {
+      //     writef("key: %s, value: %s\n", key, value);
+      //     // int val = value;
+      //     // ubyte[] data = cast(ubyte[])val;
+      //     // string hex = data.toH;
+      //     // writef("%s\n", hex);
+      //   }
+      //   // writef("%d: %d", char_glyph_table[i].ke)
+      // }
+    } break;
   }
   // for(int i = 0; i < parse_tree.vars_size(); i++)
   // {

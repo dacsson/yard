@@ -154,6 +154,7 @@ class Lexer
       LEXEMS.LEX_STR      :   _ret_self_state_RV(STATES.S_READ_CMDVAL),
       LEXEMS.LEX_INDENT   :    _ret_self_state_RV(STATES.S_READ_CMDVAL),
       LEXEMS.LEX_NLINE     :   _ret_lex_and_goto_state(LEXEMS.LEX_CMDVAL, STATES.S_NLINE_AFTER_CMD),
+      LEXEMS.LEX_DEFVAR  :   _ret_self_state_RV(STATES.S_READ_CMDVAL),
       LEXEMS.LEX_NULL     :  _ret_self_state_RV(STATES.S_READ_CMDVAL),
       LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_CMDVAL)      
     ],
