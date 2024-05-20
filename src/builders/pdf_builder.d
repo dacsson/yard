@@ -12,6 +12,7 @@ import std.string : indexOf;
 import std.format : format;
 import std.utf : decode;
 import std.algorithm: canFind;
+import std.base64 : Base64;
 
 // Объект пдф
 // ex. 
@@ -82,7 +83,7 @@ class PDF_Object
    */
   void create_page(
     size_t name, size_t rev_num, 
-    size_t parent_name, size_t resources_name, size_t contents_name,
+    size_t parent_name, size_t resources_name, size_t image_obj_name , size_t contents_name, size_t cs_obj_name,
     size_t x_box_pos, size_t y_box_pos
   )
   {
@@ -101,7 +102,14 @@ class PDF_Object
       " ]\n" ~
       "/Resources << /Font <</F1 " ~
       to!string(resources_name) ~
-      " 0 R >> /ProcSet [ /PDF /Text ] >>\n" ~
+      " 0 R >> " ~
+      "/XObject << /Im1 " ~ 
+      to!string(image_obj_name) ~
+      " 0 R >> " ~
+      "/ColorSpace <</Cs1 [/ICCBased " ~
+      to!string(cs_obj_name) ~
+      " 0 R] >>" ~
+      "\n/ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ] >>\n" ~
       "/Contents " ~
       to!string(contents_name) ~
       " 0 R\n>>";
@@ -130,7 +138,6 @@ class PDF_Object
     this.rev_num = rev_num;
     
     TTF font = new TTF(font_path);
-    string[string][] char_glyph_table = font.cmap.char_glyph_table;
 
     string cctgi_table = "";
 
@@ -143,6 +150,8 @@ class PDF_Object
 
       string line = "<" ~ hex_char_code ~ "><" ~ glyph_index ~ ">" ~ "\n";
       cctgi_table ~= line;
+
+      writef("\nUNIQUE %s\n", letter);
     }
     // for(int i = 0; i < unique_letters.length; i++) {
     //   int char_code = cast(int)unique_letters[i];
@@ -345,6 +354,47 @@ class PDF_Object
       // to!string(cid_tbl_name) ~ " 0 R\n>>";
   }
 
+  /*
+    Создать строку с потоком текста которая будет составляюшей потокового объекта
+  */
+  static string part_create_text_stream(size_t x_pos, size_t y_pos, string font_name, size_t font_size, wchar[] input_text, string font_path) {
+    TTF font = new TTF(font_path);
+    string res = 
+      "\nBT \n/" ~ to!string(font_name) ~
+      " " ~ to!string(font_size) ~
+      " Tf\n" ~
+      to!string(x_pos) ~ " " ~ to!string(y_pos) ~
+      " Td\n[";
+
+    foreach (wchar letter; input_text)
+    {
+      string glyph_index = font.find_glyph_index(letter);
+      // int char_code = cast(int)letter;
+      // string dec_code = dec_to_hexa(char_code);
+
+      string sym = "<" ~ glyph_index ~ ">";
+      res ~= sym;
+    }
+
+    res ~= "] TJ\nET";
+
+    return res;
+  }
+
+  static string part_create_image_stream(size_t h1_x, size_t h1_y, size_t h2_x, size_t h2_y, size_t w1_x, size_t w1_y, string image_name) {
+    string res = 
+      "\n/Perceptual ri q\n" ~ 
+      to!string(h1_x) ~ " " ~ 
+      to!string(h1_y) ~ " " ~ 
+      to!string(h2_x) ~ " " ~ 
+      to!string(h2_y) ~ " " ~ 
+      to!string(w1_x) ~ " " ~ 
+      to!string(w1_y) ~ " cm\n" ~ 
+      "/" ~ image_name ~ " Do\nQ\n";
+
+    return res;
+  }
+
   /** 
    * Создание объекта внутри котрого есть поток 
    * Examples: 
@@ -354,12 +404,69 @@ class PDF_Object
    *    (Hello World!)Tj -> text to be displayed itself 
    *  ET
    */
-  void create_stream_object(size_t name, size_t rev_num, size_t font_size, size_t x_pos, size_t y_pos, string text)
+  void create_stream_object(size_t name, size_t rev_num, string[] children)
   {
     this.name = name;
     this.rev_num = rev_num; 
 
-    string stream_value = "\nBT \n/F1 12 Tf \n100 100 Td \n[ <0249><026A><0262><025C><025F><026C><000F><0003><0266><0262><026A><0004>] TJ \nET\n";
+    string stream_value = "";
+    foreach (string child; children)
+    {
+      stream_value ~= child;
+    }
+
+//     string stream_value = 
+//       // "\n/Cs1 cs 0 0 0 sc " ~
+//       "\nBT \n/F1 12 Tf \n100 100 Td \n[ <0249><026A><0262><025C><025F><026C><000F><0003><0266><0262><026A><0004>] TJ \nET\n" ~ 
+//       "\n/Perceptual ri q\n132 0 0 132 45 140 cm\n/" ~
+//       image_name ~
+//       " Do\nQ\n" ~
+//       "Q
+// q
+// 72.75 87.296265 224.25 23.148926 re
+// W* n
+// q
+// .75 0 0 .75 77.25 92.546265 cm
+// 0 0 0 RG 0 0 0 rg
+// BT
+// /F4 14.666667 Tf
+// 1 0 0 -1 0 .62304592 Tm
+// 0 -13.0696621 Td <0014> Tj
+// ET
+// Q
+// Q
+// q
+// 297.75 87.296265 224.25 23.148926 re
+// W* n
+// q
+// .75 0 0 .75 302.25 92.546265 cm
+// 0 0 0 RG 0 0 0 rg
+// BT
+// /F4 14.666667 Tf
+// 1 0 0 -1 0 .62304592 Tm
+// 0 -13.0696621 Td <0015> Tj
+// ET
+// Q
+// Q
+// q
+// .75 0 0 .75 72 86.546265 cm
+// 0 0 0 RG 0 0 0 rg
+// .66666669 -.72835284 m
+// .66666669 32.60498 l
+// S
+// 300.66666 -.72835284 m
+// 300.66666 32.60498 l
+// S
+// 600.66669 -.72835284 m
+// 600.66669 32.60498 l
+// S
+// 0 -.061686199 m
+// 600 -.061686199 l
+// S
+// 0 31.938314 m
+// 600 31.938314 l
+// S
+// Q";
       // "\nBT" ~ 
       // "\n/F1 " ~ 
       // to!string(font_size) ~ 
@@ -380,6 +487,56 @@ class PDF_Object
     string compression_type;
 
     value = "<</Length " ~ to!string(stream_size) ~ " >>\nstream" ~ stream_value ~ "endstream";
+  }
+
+  void create_image_resource_object(size_t name, size_t rev_num, size_t width, size_t height, string image_path, size_t cs_obj_name) {
+    this.name = name;
+    this.rev_num = rev_num; 
+
+    // to!string(Base64.encode(cast(ubyte[])read(image_path)))
+    const ubyte[] stream_value = cast(const(ubyte)[])read(image_path);
+
+    // длина потока в байтах
+    ubyte[] byte_stream = cast(ubyte[])stream_value;
+    size_t stream_size = byte_stream.length;
+
+    // тип компрессии
+    string compression_type;
+
+    value = "<</Type /XObject \n/Subtype /Image \n/Width " ~ to!string(width) ~ 
+    "\n/ColorTransform 0" ~
+    "\n/Height " ~ to!string(height) ~ 
+    "\n/BitsPerComponent 8" ~ 
+    "\n/Filter /DCTDecode" ~
+    "\n/ColorSpace [/ICCBased " ~ to!string(cs_obj_name) ~ " 0 R]" ~
+    "\n/Length " ~ to!string(stream_size) ~ 
+    ">>\nstream\n" ~ cast(string)stream_value ~ "\nendstream";    
+  }
+
+  void create_colorspace_embedd_object(size_t name, size_t rev_num, string icc_config_path) {
+    this.name = name;
+    this.rev_num = rev_num; 
+
+    const ubyte[] stream_value = cast(ubyte[])read(icc_config_path);
+
+    // длина потока в байтах
+    ubyte[] byte_stream = cast(ubyte[])stream_value;
+    size_t stream_size = byte_stream.length;
+
+    // тип компрессии
+    string compression_type;
+
+    value = "<<\n/N 3" ~
+    "\n/Alternate /DeviceRGB" ~ 
+    "\n/Length " ~ to!string(stream_size) ~ 
+    ">>\nstream\n" ~ cast(string)stream_value ~ "\nendstream";        
+  }
+
+  void create_colorspace_object(size_t name, size_t rev_num, size_t cs_embedd_name) {
+    this.name = name;
+    this.rev_num = rev_num;
+
+    value = "/ColorSpace\n<<\n /Cs1 [/ICCBased " ~ to!string(cs_embedd_name) ~ " 0 R]\n>>";
   }
 
   string build() 
@@ -417,7 +574,7 @@ class PDF_Body
     // @TODO FIND HOW MANY PAGES
     id = 4; // пропускаем 2 и 3 это будут: объявление страницы и дерева страниц
     PDF_Object[] temp_objs;
-
+    string[] children;
     // добавляем объекты
     for(int i = 0; i < parse_tree.content_size(); i++)
     {
@@ -428,36 +585,54 @@ class PDF_Body
 
       if(tag_name == "\\з1")
       {
-        PDF_Object new_obj = new PDF_Object();
-        new_obj.create_stream_object(id += i, 0, 12, 175, 720 + i, tag_value);
-        temp_objs ~= new_obj;
-      }
+        wstring wtag_value = to!wstring(tag_value);
+        string ch_text = PDF_Object.part_create_text_stream(100, 100, "F1", 12, cast(wchar[])wtag_value, "/System/Library/Fonts/Supplemental/Times New Roman.ttf");
+        children ~= ch_text;
 
-      // уникальные буквы
-      foreach (wchar letter; tag_value)
+        // уникальн ые буквы
+        foreach (wchar letter; tag_value)
+        {
+          if(!unique_letters.canFind(letter)) unique_letters ~= letter;
+          writef("%s => | dec - %d | hex -> %s |\n", letter, cast(int)letter, dec_to_hexa(cast(int)letter));
+        }
+      }
+      else if(tag_name == "\\изо")
       {
-        if(!unique_letters.canFind(letter)) unique_letters ~= letter;
-        writef("%s => | dec - %d | hex -> %s |\n", letter, cast(int)letter, dec_to_hexa(cast(int)letter));
+        string ch_img = PDF_Object.part_create_image_stream(132, 0, 0, 132, 45, 140, "Im1");
+        children ~= ch_img;
       }
     }
 
+    PDF_Object new_obj = new PDF_Object();
+    new_obj.create_stream_object(id, 0, children);
+    temp_objs ~= new_obj;
+
+    PDF_Object cs_embed_obj = new PDF_Object();
+    cs_embed_obj.create_colorspace_embedd_object(id + 1, 0, "/Users/mac/Downloads/sRGB2014.icc");
+
+    // PDF_Object cs_obj = new PDF_Object();
+    // cs_obj.create_colorspace_object(id + 2, 0, cs_embed_obj.name);
+
     PDF_Object font_embed_obj = new PDF_Object();
-    font_embed_obj.create_embed_font(id + 1, 0, "/System/Library/Fonts/Supplemental/Times New Roman.ttf");
+    font_embed_obj.create_embed_font(id + 2, 0, "/System/Library/Fonts/Supplemental/Times New Roman.ttf");
 
     PDF_Object font_desc_obj = new PDF_Object();
-    font_desc_obj.create_font_descriptor(id + 2, 0, "YAZWPA+Times-Roman", 891, -216, 0, 662, font_embed_obj.name);
+    font_desc_obj.create_font_descriptor(id + 3, 0, "YAZWPA+Times-Roman", 891, -216, 0, 662, font_embed_obj.name);
 
     PDF_Object cid_tbl_obj = new PDF_Object();
-    cid_tbl_obj.create_cid_tbl(id + 3, 0, unique_letters,"/System/Library/Fonts/Supplemental/Times New Roman.ttf");
+    cid_tbl_obj.create_cid_tbl(id + 4, 0, unique_letters,"/System/Library/Fonts/Supplemental/Times New Roman.ttf");
 
+    PDF_Object image_obj = new PDF_Object();
+    image_obj.create_image_resource_object(id + 5, 0, 256, 256, "/Users/mac/Downloads/ex.jpeg", cs_embed_obj.name);
+  
     PDF_Object resources_obj = new PDF_Object();
-    resources_obj.create_font_object(id + 4, 0, "CIDFontType2", "F1", "YAZWPA+Times-Roman", font_desc_obj.name, unique_letters, "/System/Library/Fonts/Supplemental/Times New Roman.ttf");
+    resources_obj.create_font_object(id + 6, 0, "CIDFontType2", "F1", "YAZWPA+Times-Roman", font_desc_obj.name, unique_letters, "/System/Library/Fonts/Supplemental/Times New Roman.ttf");
 
     PDF_Object parent_font_obj = new PDF_Object();
-    parent_font_obj.create_base_font_object(id + 5, 0, resources_obj.name, cid_tbl_obj.name);
+    parent_font_obj.create_base_font_object(id + 7, 0, resources_obj.name, cid_tbl_obj.name);
 
     PDF_Object page_obj = new PDF_Object();
-    page_obj.create_page(3, 0, 2, parent_font_obj.name, temp_objs[0].name, 500, 800);
+    page_obj.create_page(3, 0, 2, parent_font_obj.name, image_obj.name,temp_objs[0].name, cs_embed_obj.name ,596, 842);
     
     PDF_Object pages_tree_obj = new PDF_Object();
     pages_tree_obj.create_pages_tree(2, 0, pages_count, [page_obj]);
@@ -470,9 +645,11 @@ class PDF_Body
       objects ~= obj;
     }
 
+    objects ~= cs_embed_obj;
     objects ~= font_embed_obj;
     objects ~= font_desc_obj;
     objects ~= cid_tbl_obj;
+    objects ~= image_obj;
     objects ~= resources_obj;
     objects ~= parent_font_obj;
   }
