@@ -346,8 +346,8 @@ class Html_Builder : IBuilder
           </style>
         </head>
         <body>`
-      ~ (isTitlePresent  ?  _title : " " )
-      ~ content ~
+      ~ _title ~
+      content ~
       `
         </body>
       </html>`;

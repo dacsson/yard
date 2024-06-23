@@ -73,9 +73,12 @@ class DecodedSymbol
     if (sym == "EOL") return LEXEMS.LEX_EOL;
     else if (!matchFirst(sym, `^\d+$`).empty()) return LEXEMS.LEX_STR;
     else if (!matchFirst(sym, `[\p{Cyrillic}+|\p{L}+]`).empty()) return LEXEMS.LEX_STR;
+    else if (sym == ".") return LEXEMS.LEX_STR;
     else if (!matchFirst(sym, `^\p{L}+$`).empty()) return LEXEMS.LEX_STR;
     // else if (!matchFirst(sym, `[!\\()]`).empty()) return LEXEMS.LEX_OP; 
     else if (sym == "!") return LEXEMS.LEX_DEFVAR;
+    else if (sym == ":") return LEXEMS.LEX_COLON;
+    else if (sym == ",") return LEXEMS.LEX_COMMA;
     else if (sym == "\\") return LEXEMS.LEX_DEFCMD;
     else if (sym == " ") return LEXEMS.LEX_INDENT;
     else if (!matchFirst(sym, `\n`).empty()) return LEXEMS.LEX_NLINE;
@@ -108,7 +111,39 @@ class Lexer
       LEXEMS.LEX_STR     :   _ret_self_state_RV(STATES.S_DEF_VAR),
       LEXEMS.LEX_DEFVAR  :   _ret_self_state_RV(STATES.S_DEF_VAR),
       LEXEMS.LEX_INDENT  :   _ret_lex_and_goto_state(LEXEMS.LEX_DEFVAR, STATES.S_INDENT_AFTER_VAR),
+      LEXEMS.LEX_COLON   :   _ret_lex_and_goto_state(LEXEMS.LEX_DEFVAR, STATES.S_COLON_AFTER_VAR),
       LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_DEFVAR)
+    ],
+    STATES.S_COLON_AFTER_VAR : [
+      LEXEMS.LEX_COLON   :  _ret_self_state_RV(STATES.S_COLON_AFTER_VAR),
+      LEXEMS.LEX_STR     :  _ret_lex_and_goto_state(LEXEMS.LEX_STR, STATES.S_READ_OPTNAME),
+      LEXEMS.LEX_INDENT  :  _ret_self_state_RV(STATES.S_COLON_AFTER_VAR),
+      LEXEMS.LEX_NLINE   :  _ret_self_state_RV(STATES.S_COLON_AFTER_VAR)
+    ],
+    STATES.S_READ_OPTNAME : [
+      LEXEMS.LEX_STR     :   _ret_self_state_RV(STATES.S_READ_OPTNAME),
+      LEXEMS.LEX_INDENT  :   _ret_lex_and_goto_state(LEXEMS.LEX_OPTNAME, STATES.S_SPACE_AFTER_OPTNAME),
+      LEXEMS.LEX_NLINE   :   _ret_lex_and_goto_state(LEXEMS.LEX_OPTNAME, STATES.S_SPACE_AFTER_OPTNAME),
+      LEXEMS.LEX_COLON   :   _ret_lex_and_goto_state(LEXEMS.LEX_OPTNAME, STATES.S_SPACE_AFTER_OPTNAME),
+    ],
+    STATES.S_SPACE_AFTER_OPTNAME : [
+      LEXEMS.LEX_STR     :   _ret_self_state_RV(STATES.S_READ_OPTVAL),
+      LEXEMS.LEX_INDENT  :   _ret_lex_and_goto_state(LEXEMS.LEX_INDENT, STATES.S_SPACE_AFTER_OPTNAME),
+      LEXEMS.LEX_NLINE   :   _ret_lex_and_goto_state(LEXEMS.LEX_NLINE, STATES.S_SPACE_AFTER_OPTNAME),
+      LEXEMS.LEX_COLON   :   _ret_lex_and_goto_state(LEXEMS.LEX_COLON, STATES.S_SPACE_AFTER_OPTNAME)
+    ],
+    STATES.S_READ_OPTVAL : [
+      LEXEMS.LEX_STR     :   _ret_self_state_RV(STATES.S_READ_OPTVAL),
+      LEXEMS.LEX_COMMA   :   _ret_lex_and_goto_state(LEXEMS.LEX_OPTVAL, STATES.S_COMMA_AFTER_OPTVAL),
+      LEXEMS.LEX_NLINE   :   _ret_lex_and_goto_state(LEXEMS.LEX_OPTVAL, STATES.S_COMMA_AFTER_OPTVAL),
+      LEXEMS.LEX_INDENT  :   _ret_self_state_RV(STATES.S_READ_OPTVAL)
+    ],
+    STATES.S_COMMA_AFTER_OPTVAL : [
+      LEXEMS.LEX_STR     :  _ret_lex_and_goto_state(LEXEMS.LEX_STR, STATES.S_READ_OPTNAME),
+      LEXEMS.LEX_INDENT  :   _ret_self_state_RV(STATES.S_COMMA_AFTER_OPTVAL),
+      LEXEMS.LEX_NLINE   :   _ret_self_state_RV(STATES.S_COMMA_AFTER_OPTVAL),
+      LEXEMS.LEX_COMMA   :   _ret_self_state_RV(STATES.S_COMMA_AFTER_OPTVAL),
+      LEXEMS.LEX_DEFVAR  :   _ret_lex_and_goto_state(LEXEMS.LEX_COMMA, STATES.S_DEF_VAR)
     ],
     STATES.S_SEEN_INDENT : [
       LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_INDENT)
@@ -155,6 +190,8 @@ class Lexer
       LEXEMS.LEX_INDENT   :    _ret_self_state_RV(STATES.S_READ_CMDVAL),
       LEXEMS.LEX_NLINE     :   _ret_lex_and_goto_state(LEXEMS.LEX_CMDVAL, STATES.S_NLINE_AFTER_CMD),
       LEXEMS.LEX_DEFVAR  :   _ret_self_state_RV(STATES.S_READ_CMDVAL),
+      LEXEMS.LEX_COLON   : _ret_self_state_RV(STATES.S_READ_CMDVAL),
+      LEXEMS.LEX_COMMA   : _ret_self_state_RV(STATES.S_READ_CMDVAL),
       LEXEMS.LEX_NULL     :  _ret_self_state_RV(STATES.S_READ_CMDVAL),
       LEXEMS.LEX_EOL     :   _ret_resolved_lex_LV(LEXEMS.LEX_CMDVAL)      
     ],
@@ -168,7 +205,7 @@ class Lexer
     STATES.S_SEEN_FREE_STR : [
       LEXEMS.LEX_STR : _ret_self_state_RV(STATES.S_SEEN_FREE_STR),
       LEXEMS.LEX_INDENT : _ret_self_state_RV(STATES.S_SEEN_FREE_STR),
-      LEXEMS.LEX_NLINE : _ret_self_state_RV(STATES.S_SEEN_FREE_STR),
+      LEXEMS.LEX_NLINE : _ret_lex_and_goto_state(LEXEMS.LEX_STR, STATES.S_NLINE_AFTER_VAL),
       LEXEMS.LEX_DEFCMD : _ret_lex_and_goto_state(LEXEMS.LEX_STR, STATES.S_SEEN_CMDDEF),
       LEXEMS.LEX_EOL : _ret_resolved_lex_LV(LEXEMS.LEX_STR)
     ]

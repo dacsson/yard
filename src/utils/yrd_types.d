@@ -1,5 +1,78 @@
 module yard.utils.yrd_types;
 
+enum PAGE_STYLE : string {
+  HEIGHT  = "высота",
+  WIDTH   = "ширина",
+  TMARGIN = "верхотступ",
+  BMARGIN = "нижотступ",
+  LMARGIN = "левотступ",
+  RMARGIN = "правотступ",
+  FONT    = "шрифт"
+}
+
+enum TXT_STYLE : string {
+  FSIZE     = "размер",
+  ALIGMENT  = "положение",
+  REGISTRE  = "регистр", 
+  FORMAT    = "формат",
+  REDLINE   = "краснаястрок",
+  MARGIN    = "отступ",
+  BEFORE    = "перед",
+  AFTER     = "после",
+  ROWSPACE  = "междустрок",
+  NUMBERING = "нумерация"
+}
+
+enum IMG_STYLE : string {
+  HEIGHT    = "высота",
+  WIDTH     = "ширина",
+  ALIGMENT  = "положение",
+  MARGIN    = "отступ",
+  BEFORE    = "перед",
+  AFTER     = "после"
+}
+
+enum CNT_STYLE : string {
+  MARGIN1   = "первый",
+  MARGIN2   = "второй",
+  MARGIN3   = "третий",
+  DELIMET   = "делитель"
+}
+
+enum TAGS : string {
+  PG = "стр",
+  H1 = "з1",
+  H2 = "з2",
+  H3 = "з3",
+  H4 = "з4",
+  H5 = "з5",
+  H6 = "з6",
+  PA = "а",
+  P1 = "а1",
+  P2 = "а2",
+  LI = "ли",
+  IM = "изо",
+  TA = "таб",
+  EL = "эл",
+  CE = "яч",
+  TPG = "тстр",
+  TH1 = "тз1",
+  TH2 = "тз2",
+  TH3 = "тз3",
+  TH4 = "тз4",
+  TH5 = "тз5",
+  TH6 = "тз6",
+  TPA = "та",
+  TP1 = "та1",
+  TP2 = "та2",
+  TLI = "тли",
+  TIM = "тизо",
+  TTA = "ттаб",
+  TEL = "тэл",
+  TCE = "тяч",
+  CN  = "сод"
+}
+
 /** 
  * Bugs: убрать неисползуемые
  */
@@ -19,6 +92,12 @@ enum STATES {
   S_DEF_CMD     , // декларация команды
   S_SEEN_CMDDEF , // ожидаем имя команды
   S_SEEN_FREE_STR,  // текст без команд и переменных
+  // FOR TEMPLATES
+  S_COLON_AFTER_VAR,
+  S_READ_OPTNAME,
+  S_SPACE_AFTER_OPTNAME,
+  S_READ_OPTVAL,
+  S_COMMA_AFTER_OPTVAL
 }
 
 /** 
@@ -42,7 +121,12 @@ enum LEXEMS {
   LEX_INDENT  ,
   LEX_NLINE   ,
   LEX_NULL    ,
-  LEX_EOL     
+  LEX_EOL     ,
+  // FOR TEMPLATES
+  LEX_COMMA   ,
+  LEX_COLON   ,
+  LEX_OPTNAME ,
+  LEX_OPTVAL  ,
 }
 
 /**

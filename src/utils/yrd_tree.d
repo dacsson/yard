@@ -3,9 +3,11 @@ module yard.utils.yrd_tree;
 import std.stdio : writef;
 import std.array;
 import std.algorithm;
+import std.conv : to;
 
 import yard.lexer;
 import yard.utils.yrd_types;
+import yard.utils.yrd_errors;
 
 struct Leaf
 {
@@ -19,18 +21,24 @@ struct Leaf
   }
 }
 
-struct Yrd_node
+struct Super_Leaf
 {
-  Yrd_node* parent;
-  Yrd_node*[] children; // optimize
-  Token token;
+  Token parent;
+  Leaf child; 
   
-  this(Yrd_node* parent, Yrd_node*[] children, Token token)
+  this(Token parent, Leaf child)
   {
     this.parent = parent;
-    this.children = children.dup;
-    this.token = token;
+    this.child = child;
   }
+}
+
+struct Header
+{
+  size_t page;
+  size_t level;
+  size_t count;
+  string value;
 }
 
 /** 
@@ -43,6 +51,19 @@ class Yrd_tree
   Leaf[] content;
   // дерево переменных документа (важных параметров т.е. класс документа и тому подобное)
   Leaf[] vars;
+  // 
+  Super_Leaf[] templ_content;
+
+  Header[] headers;
+
+  size_t h1_count, h2_count, h3_count, pg_count;
+
+  this() {
+    h1_count = 0;
+    h2_count = 0;
+    h3_count = 0;
+    pg_count = 1;
+  }
 
   size_t vars_size()
   {
@@ -53,29 +74,11 @@ class Yrd_tree
   {
     return this.content.length;
   }
-  /** 
-   * Deprecated: если бы структура имела конструктор то пришлось бы 
-   * именно в нём прописывать правила добавления в массив (то что делает парсер!)
-   */
-  // this(Token[] tokens)
-  // {
-  //   foreach (Token key; tokens)
-  //   {
-  //     nodes ~= Yrd_node(key);
-  //     length++;
-  //   }
-  //   this.nodes = nodes;
-  // }
 
-  // ref Token opIndex(size_t index)
-  // {
-  //   return nodes[index].token;
-  // }
-
-  // void opIndexAssign(Token)(Token value, size_t index)
-  // {
-  //   nodes[index].token = value;
-  // }
+  size_t templ_size()
+  {
+    return this.templ_content.length;
+  }
 
   void make_var_leaf(Token name, Token value)
   {
@@ -84,7 +87,35 @@ class Yrd_tree
 
   void make_tag_leaf(Token name, Token value)
   {
+    // writef("making leaf %s==%s %s %s\n", name.value, TAGS.H1, value.value, name.value == TAGS.H1);
+
+    if(name.value == "\\з1") {
+      writef(" h1: %s | %d |\n", value.value, h1_count);
+      value.value = (to!string(h1_count + 1) ~ " " ~ value.value);
+      Header header = Header(pg_count, 1, h1_count, value.value);
+      headers ~= header;
+      h1_count++;
+    }
+    else if(name.value == "\\з2") {
+      writef(" h1: %s | %d | %d |\n", value.value, h1_count, h2_count);
+      value.value = ( to!string(h1_count) ~ "." ~ to!string(h2_count + 1) ~ " " ~ value.value);
+      Header header = Header(pg_count, 2, h2_count, value.value);
+      headers ~= header;
+      h2_count++;
+    }
+    else if(name.value == "\\з3") {
+      value.value = ( to!string(h1_count) ~ "." ~ to!string(h2_count) ~ "." ~ to!string(h3_count + 1) ~ " " ~ value.value);
+      Header header = Header(pg_count, 3, h3_count, value.value);
+      headers ~= header;
+      h3_count++;
+    }
+    else if(name.value == "\\стр") pg_count++;
     content ~= Leaf(name, value);
+  }
+
+  void make_templ_leaf(Token pname, Token cname, Token cvalue) 
+  {
+    templ_content  ~= Super_Leaf(pname, Leaf(cname, cvalue));
   }
 
   Token get_var_leaf(size_t index, bool retValue)
@@ -97,6 +128,19 @@ class Yrd_tree
   {
     if(retValue) { return content[index].value; }
     return content[index].name;
+  }
+
+  string get_templ_opt_value(string parent_name, string opt_name)
+  {
+    // writef(" SEARCHIN LEAF %s for %s", parent_name, opt_name);
+    foreach (Super_Leaf el; templ_content)
+    {
+      if(el.parent.value == parent_name && el.child.name.value == opt_name) {
+        return el.child.value.value;
+      }
+    }
+
+    throw new ERROR_Option_Not_Found(opt_name, parent_name);
   }
 
   Token[] find_var_leaf(string var_name)
