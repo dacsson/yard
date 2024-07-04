@@ -636,8 +636,15 @@ class TTF {
   string find_glyph_index(wchar char_code) {
     string hex_char_code = dec_to_hexa(cast(int)char_code);
     // WHY????
+    // writef(" READING %s \n", char_code);
+    if(char_code == '•') {
+      return dec_to_hexa(135);
+    }
     if(char_code == 'Ё') {
       return dec_to_hexa(203);
+    }
+    if(char_code == 'ё') {
+      return dec_to_hexa(115);
     }
     if(char_code == '«') {
       return dec_to_hexa(169);

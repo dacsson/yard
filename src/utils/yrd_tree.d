@@ -90,17 +90,19 @@ class Yrd_tree
     // writef("making leaf %s==%s %s %s\n", name.value, TAGS.H1, value.value, name.value == TAGS.H1);
 
     if(name.value == "\\з1") {
-      writef(" h1: %s | %d |\n", value.value, h1_count);
+      // writef(" h1: %s | %d |\n", value.value, h1_count);
       value.value = (to!string(h1_count + 1) ~ " " ~ value.value);
       Header header = Header(pg_count, 1, h1_count, value.value);
       headers ~= header;
+      h2_count = 0;
       h1_count++;
     }
     else if(name.value == "\\з2") {
-      writef(" h1: %s | %d | %d |\n", value.value, h1_count, h2_count);
+      // writef(" h1: %s | %d | %d |\n", value.value, h1_count, h2_count);
       value.value = ( to!string(h1_count) ~ "." ~ to!string(h2_count + 1) ~ " " ~ value.value);
       Header header = Header(pg_count, 2, h2_count, value.value);
       headers ~= header;
+      h3_count = 0;
       h2_count++;
     }
     else if(name.value == "\\з3") {

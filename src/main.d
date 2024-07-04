@@ -37,16 +37,16 @@ int main(string[] args)
   Yrd_tree parse_tree = parser.parse();
 
   // read template => взять ПЕРВУЮ ПЕРЕЕМЕМННУЮ из файла
-  string template_name = "/Users/mac/Desktop/Projects/yard/test/" ~ parse_tree.get_var_leaf(0, 1).value ~ ".shyard";
+  string template_name = "/home/artjom/Рабочий стол/Projects/yard/test/" ~ parse_tree.get_var_leaf(0, 1).value ~ ".shyard";
   // writef("TEMPLATE %s\n", template_name);
   string template_content = readText(template_name);
 
   Lexer templ_lexer = new Lexer(template_content);
   Token[] tlexs = templ_lexer.get_tokens();
 
-  // foreach (Token key; plexs)
+  // for(int i = 0; i < parse_tree.content_size(); i++) 
   // {
-  //   writef("LEXEM: %s %s\n", key.type, key.value);
+  //   writef(" parent: %s | child %s\n", parse_tree.get_tag_leaf(i, 0), parse_tree.get_tag_leaf(i, 1));
   // }
 
   Parser tparser = new Parser(tlexs);
@@ -73,7 +73,7 @@ int main(string[] args)
       PDF_Builder pdf = new PDF_Builder();
       string pdf_output = pdf.build(parse_tree, tparse_tree);
       // writef("pdf:\n%s\n", pdf_output);
-      pdf.create_file("/Users/mac/Desktop/Projects/yard/test/new.pdf");
+      pdf.create_file("/home/artjom/Рабочий стол/Projects/yard/test/new.pdf");
     } break;
     default: {
       // foreach (Token key; plexs)

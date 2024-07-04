@@ -67,6 +67,8 @@ size_t TMP_P1_FONT_SIZE, TMP_P1_MARGIN, TMP_P1_REDLINE, TMP_P1_BEFORE, TMP_P1_AF
 string TMP_P1_ALIGMENT, TMP_P1_REGISTRE, TMP_P1_FORMAT, TMP_P1_NUMBERING;
 size_t TMP_P2_FONT_SIZE, TMP_P2_MARGIN, TMP_P2_REDLINE, TMP_P2_BEFORE, TMP_P2_AFTER, TMP_P2_ROWSPACE;
 string TMP_P2_ALIGMENT, TMP_P2_REGISTRE, TMP_P2_FORMAT, TMP_P2_NUMBERING;
+size_t TMP_P3_FONT_SIZE, TMP_P3_MARGIN, TMP_P3_REDLINE, TMP_P3_BEFORE, TMP_P3_AFTER, TMP_P3_ROWSPACE;
+string TMP_P3_ALIGMENT, TMP_P3_REGISTRE, TMP_P3_FORMAT, TMP_P3_NUMBERING;
 size_t TMP_CE_FONT_SIZE, TMP_CE_MARGIN, TMP_CE_REDLINE, TMP_CE_BEFORE, TMP_CE_AFTER, TMP_CE_ROWSPACE;
 string TMP_CE_ALIGMENT, TMP_CE_REGISTRE, TMP_CE_FORMAT, TMP_CE_NUMBERING;
 size_t IMG_HEIGHT, IMG_WIDTH, IMG_MARGIN, IMG_BEFORE, IMG_AFTER;
@@ -175,7 +177,7 @@ class PDF_Object
       "\n/XObject << /Im1 " ~ 
       to!string(image_obj_name) ~
       " 0 R >> " ~
-      "\n/ColorSpace /DeviceRGB " ~
+      // "\n/ColorSpace /DeviceRGB " ~
       // to!string(cs_obj_name) ~
       // " 0 R] >>" ~
       "\n/ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ] >>\n" ~
@@ -538,7 +540,7 @@ class PDF_Object
 
   static string part_create_image_stream(size_t h1_x, size_t h1_y, size_t h2_x, size_t h2_y, size_t w1_x, size_t w1_y, string image_name) {
     string res = 
-      "\n/Perceptual ri q\n" ~ 
+      "\nq\n" ~ 
       to!string(h1_x) ~ " " ~ 
       to!string(h1_y) ~ " " ~ 
       to!string(h2_x) ~ " " ~ 
@@ -564,7 +566,7 @@ class PDF_Object
     this.name = name;
     this.rev_num = rev_num; 
     
-    writef(" CALC PAGE MARGIN %d\n", children_heights);
+    // writef(" CALC PAGE MARGIN %d\n", children_heights);
     size_t margin = 842 - children_heights;
 
     string stream_value = 
@@ -672,7 +674,7 @@ class PDF_Object
     "\n/Height " ~ to!string(height) ~ 
     "\n/BitsPerComponent 8" ~ 
     "\n/Filter /DCTDecode" ~
-    "\n/ColorSpace [/ICCBased " ~ to!string(cs_obj_name) ~ " 0 R]" ~
+    "\n/ColorSpace /DeviceRGB" ~
     "\n/Length " ~ to!string(stream_size) ~ 
     ">>\nstream\n" ~ cast(string)stream_value ~ "\nendstream";    
   }
@@ -1111,7 +1113,7 @@ class PDF_Body
         }
         else if(tag_name == "\\з1")
         {
-          writef(" BEFORE | %d | %d | with %d + %d \n", children_widths, prev_bottom_margin, H1_AFTER, add_margin_before(parse_tree, i));
+          // writef(" BEFORE | %d | %d | with %d + %d \n", children_widths, prev_bottom_margin, H1_AFTER, add_margin_before(parse_tree, i));
 
           create_header_obj(
             parse_tree, i,
@@ -1159,6 +1161,30 @@ class PDF_Body
           //   if(!unique_letters.canFind(letter)) unique_letters ~= letter;
           //   // writef("%s => | dec - %d | hex -> %s |\n", letter, cast(int)letter, dec_to_hexa(cast(int)letter));
           // }
+        }
+        else if(tag_name == "\\от")
+        {
+          size_t ntag_value = to!size_t(tag_value);
+          wchar[] blank = [' '];
+          // wtag_value = (TMP_H1_REGISTRE == "капс") ? to!wstring(tag_value.toUpper) : to!wstring(tag_value);
+          // wtag_value = (TMP_H1_NUMBERING == "да") ? (to!wstring(TMP_H1_count--) ~ " " ~ wtag_value) : wtag_value;
+          // TMP_H1_count++;
+
+          // writef("\n WIDTH - | %d <-> %d | RES - | %d |FOR %s\n", line_width, line_width / 161, (PAGE_WIDTH - (line_width / 12))/ 2, wtag_value);
+          string ch_text = PDF_Object.part_create_text_stream(
+            // WHY 320 ??
+            0, 
+            0, 
+            prev_bottom_margin + ntag_value + add_margin_before(parse_tree, i), 
+            "F1", 
+            12, 
+            blank,
+            normal_font_path
+            // "/System/Library/Fonts/Supplemental/Times New Roman.ttf"
+          );
+          // children ~= ch_text;
+          children_widths += (ntag_value + add_margin_before(parse_tree, i));
+          prev_bottom_margin += (ntag_value + add_margin_before(parse_tree, i));          
         }
         else if(tag_name == "\\тз1")
         {
@@ -1240,11 +1266,7 @@ class PDF_Body
           // children_widths += 50; 
           // prev_bottom_margin += 50;
         }
-        else if(tag_name == "\\яч" && tag_value == "начало")
-        {
-        
-        }
-        else if(tag_name == "\\эл") 
+        else if(tag_name == "\\яч")
         {
           wtag_value = to!wstring(tag_value);
 
@@ -1298,7 +1320,127 @@ class PDF_Body
           if(tbl_curr_row > tbl_rows) {
             // ссылка на табл конец
           }
-          tbl_curr_cell++; 
+          tbl_curr_cell++;         
+        }
+        else if(tag_name == "\\ли" && tag_value == "начало") {
+          list_count = 0;
+        }
+        else if(tag_name == "\\ли") {
+          
+        }
+        else if(tag_name == "\\эл") 
+        {
+         // writef(" paragraph %s\n", tag_value);
+          wtag_value = to!wstring("• " ~ tag_value);
+          wstring curr_line = "";
+          wstring red_line = "";
+          size_t curr_width = 0;
+          // writef("\n________\nPAR %s\n\twidth %d\n\n", wtag_value, line_width);
+          wstring[] sublines;
+
+          TTF font = new TTF(Searcher.find_font_path(PAGE_FONT));
+          size_t devider = font.head.unitsPerEm / PA_FONT_SIZE;
+
+          for(size_t l = 0; l < wtag_value.length; l++)
+          {
+            wchar letter = wtag_value[l];
+
+            int width = font.find_glyph_width(letter);
+            // writef("    width for %s is %d\n", letter, width);
+            // writef(" width for %s is %d\n", letter, width);
+            line_width += width;
+            // writef(" | %d | %d |\n", ((line_width / devider) + PAGE_LEFT_MARGIN + PA_MARGIN + PA_REDLINE), (PAGE_WIDTH - PAGE_RIGHT_MARGIN));
+            if(sublines.length == 0) {
+              if(((line_width / devider) + PAGE_LEFT_MARGIN + PA_MARGIN + PA_REDLINE) <= (PAGE_WIDTH - PAGE_RIGHT_MARGIN)) {
+                curr_line ~= letter;
+                curr_width = (line_width + PAGE_LEFT_MARGIN + PA_MARGIN + PA_REDLINE);              
+              }
+              else {
+                // writef(" new line with letter (%s)\n", letter);
+                // writef(" REDLINE new line with letter (%s %s %s %s %s)\n", wtag_value[l-1], letter, wtag_value[l+1], wtag_value[l+2], wtag_value[l+3]);
+
+                if(!isWhite(letter)) l--;
+                sublines ~= curr_line;
+                curr_line = "";
+                red_line = curr_line;
+                curr_width = 0;
+                line_width = 0;
+              }
+            }
+            else {
+              if(((line_width / devider) + PAGE_LEFT_MARGIN + PA_MARGIN) <= (PAGE_WIDTH - PAGE_RIGHT_MARGIN)) {
+                curr_line ~= letter;
+                curr_width = (line_width + PAGE_LEFT_MARGIN + PA_MARGIN );
+              }
+              else {
+                // writef(" NO REDLINE new line with letter (%s %s %s %s %s)\n", wtag_value[l-1], letter, wtag_value[l+1], wtag_value[l+2], wtag_value[l+3]);
+                if(!isWhite(letter)) l--;
+                sublines ~= curr_line;
+                curr_line = "";
+                curr_width = 0;
+                line_width = 0;
+              }
+            }
+          }  
+
+          // writef(" last line %s | length %d | \n\n", curr_line, sublines.length);
+
+          // append last line BUT WHY???? btw date : 25.06 a day before my finale...
+          if(sublines.length > 1 || (curr_line != red_line)) sublines ~= curr_line;
+
+          // foreach (wstring key; sublines)
+          // {
+          //   writef(" subline %s\n", key);
+          // }
+
+          // добавить остальные саблинии
+          // writef(" sublines count %d for %s\n", sublines.length, tag_value);
+          if(sublines.length > 1) {
+            for(size_t j = sublines.length - 1; j >= 1; j--)
+            {
+              string ch_line = PDF_Object.part_create_text_stream(
+                PAGE_LEFT_MARGIN + PA_MARGIN, 
+                0, 
+                (sublines.length - 1 != j) ? prev_bottom_margin + PA_ROWSPACE : (prev_bottom_margin + PA_AFTER + add_margin_before(parse_tree, i)), 
+                "F1", 
+                PA_FONT_SIZE, 
+                cast(wchar[])sublines[j],
+                Searcher.find_font_path(PAGE_FONT)
+              );
+              children ~= ch_line;
+              (sublines.length - 1 != j) ? (children_widths += PA_ROWSPACE) : (children_widths += (PA_AFTER + add_margin_before(parse_tree, i)));
+              (sublines.length - 1 != j) ? (prev_bottom_margin += PA_ROWSPACE) : (prev_bottom_margin += (PA_AFTER + add_margin_before(parse_tree, i)));
+            }
+          } 
+          
+          writef(" is > 1 %s %d\n", sublines.length > 1, sublines.length);
+          // добавить первую линию
+          string ch_text = PDF_Object.part_create_text_stream(
+            PAGE_LEFT_MARGIN + PA_MARGIN + PA_REDLINE, 
+            0, 
+            (sublines.length > 1 ) ? prev_bottom_margin + PA_ROWSPACE : prev_bottom_margin + PA_AFTER + add_margin_before(parse_tree, i), 
+            "F1", 
+            PA_FONT_SIZE, 
+            cast(wchar[])sublines[0],
+            Searcher.find_font_path(PAGE_FONT)
+          );
+          children ~= ch_text;
+          (sublines.length > 1) ? (children_widths += PA_ROWSPACE) : (children_widths += (PA_AFTER + add_margin_before(parse_tree, i)));
+          (sublines.length > 1) ? (prev_bottom_margin += PA_ROWSPACE) : (prev_bottom_margin += (PA_AFTER + add_margin_before(parse_tree, i)));
+          // writef(" AFTER %s -> %d\n", sublines[0], add_margin_before(parse_tree, i));
+          // writef(" SUbstring count %d\n", sublines.length);
+
+          // writef("\n HEADER 1 %s - %s - %s - %d\n", wtag_value, H1_REGISTRE, capitalize(tag_value), line_width);
+
+          // уникальн ые буквы
+          foreach (wchar letter; wtag_value)
+          {
+            if(!unique_letters.canFind(letter)) unique_letters ~= letter;
+          }
+
+          // writef("\n___________\n");
+
+          line_width = 0;
 
           // writef(" curr cell | %d | curr row | %d | curr col | %d |  PREV | %d |\n", tbl_curr_cell, tbl_curr_row, tbl_curr_col, prev_bottom_margin);     
         }
@@ -1315,7 +1457,7 @@ class PDF_Body
             "Im1"
           );
           children ~= ch_img;
-          writef(" | %s | IMAGE %d | %d |\n", IMG_ALIGMENT,add_margin_after(parse_tree, i) + 40, prev_bottom_margin);
+          // writef(" | %s | IMAGE %d | %d |\n", IMG_ALIGMENT,add_margin_after(parse_tree, i) + 40, prev_bottom_margin);
           // children_widths += (90 + add_margin_before(parse_tree, i));
           // prev_bottom_margin += (90 + add_margin_before(parse_tree, i));
         }
@@ -1407,8 +1549,9 @@ class PDF_Body
           // writef(" paragraph %s\n", tag_value);
           wtag_value = to!wstring(tag_value);
           wstring curr_line = "";
+          wstring red_line = "";
           size_t curr_width = 0;
-
+          // writef("\n________\nPAR %s\n\twidth %d\n\n", wtag_value, line_width);
           wstring[] sublines;
 
           TTF font = new TTF(Searcher.find_font_path(PAGE_FONT));
@@ -1430,9 +1573,12 @@ class PDF_Body
               }
               else {
                 // writef(" new line with letter (%s)\n", letter);
+                // writef(" REDLINE new line with letter (%s %s %s %s %s)\n", wtag_value[l-1], letter, wtag_value[l+1], wtag_value[l+2], wtag_value[l+3]);
+
                 if(!isWhite(letter)) l--;
                 sublines ~= curr_line;
                 curr_line = "";
+                red_line = curr_line;
                 curr_width = 0;
                 line_width = 0;
               }
@@ -1443,7 +1589,7 @@ class PDF_Body
                 curr_width = (line_width + PAGE_LEFT_MARGIN + PA_MARGIN );
               }
               else {
-                // writef(" new line with letter (%s)\n", letter);
+                // writef(" NO REDLINE new line with letter (%s %s %s %s %s)\n", wtag_value[l-1], letter, wtag_value[l+1], wtag_value[l+2], wtag_value[l+3]);
                 if(!isWhite(letter)) l--;
                 sublines ~= curr_line;
                 curr_line = "";
@@ -1452,7 +1598,17 @@ class PDF_Body
               }
             }
           }  
-          
+
+          // writef(" last line %s | length %d | \n\n", curr_line, sublines.length);
+
+          // append last line BUT WHY???? btw date : 25.06 a day before my finale...
+          if(sublines.length > 1 || (curr_line != red_line)) sublines ~= curr_line;
+
+          // foreach (wstring key; sublines)
+          // {
+          //   writef(" subline %s\n", key);
+          // }
+
           // добавить остальные саблинии
           // writef(" sublines count %d for %s\n", sublines.length, tag_value);
           if(sublines.length > 1) {
@@ -1471,15 +1627,14 @@ class PDF_Body
               (sublines.length - 1 != j) ? (children_widths += PA_ROWSPACE) : (children_widths += (PA_AFTER + add_margin_before(parse_tree, i)));
               (sublines.length - 1 != j) ? (prev_bottom_margin += PA_ROWSPACE) : (prev_bottom_margin += (PA_AFTER + add_margin_before(parse_tree, i)));
             }
-          } else {
-            sublines ~= curr_line;
-          }
-
+          } 
+          
+          // writef(" is > 1 %s %d\n", sublines.length > 1, sublines.length);
           // добавить первую линию
           string ch_text = PDF_Object.part_create_text_stream(
             PAGE_LEFT_MARGIN + PA_MARGIN + PA_REDLINE, 
             0, 
-            (sublines.length > 1) ? prev_bottom_margin + PA_ROWSPACE : prev_bottom_margin + PA_AFTER + add_margin_before(parse_tree, i), 
+            (sublines.length > 1 ) ? prev_bottom_margin + PA_ROWSPACE : prev_bottom_margin + PA_AFTER + add_margin_before(parse_tree, i), 
             "F1", 
             PA_FONT_SIZE, 
             cast(wchar[])sublines[0],
@@ -1498,6 +1653,10 @@ class PDF_Body
           {
             if(!unique_letters.canFind(letter)) unique_letters ~= letter;
           }
+
+          // writef("\n___________\n");
+
+          line_width = 0;
         }
         else if(tag_name == "\\та")
         {
@@ -1706,7 +1865,7 @@ class PDF_Body
 
           // добавить первую линию
           string ch_text = PDF_Object.part_create_text_stream(
-            PAGE_LEFT_MARGIN + TMP_P1_MARGIN + TMP_P1_REDLINE, 
+            ((PAGE_WIDTH + TMP_P1_MARGIN) - (line_width / devider ))/ 2, 
             0, 
             (sublines.length > 1) ? prev_bottom_margin + TMP_P1_ROWSPACE : prev_bottom_margin + TMP_P1_AFTER + add_margin_before(parse_tree, i), 
             "F1", 
@@ -1880,44 +2039,127 @@ class PDF_Body
             if(!unique_letters.canFind(letter)) unique_letters ~= letter;
           }
         }
-        else if(tag_name == "\\з3")
+        else if(tag_name == "\\та3") 
         {
-          wtag_value = (H3_REGISTRE == "капс") ? to!wstring(tag_value.toUpper) : to!wstring(tag_value);
-          // wtag_value = (H3_NUMBERING == "да") ? (to!wstring(h3_count--) ~ " " ~ wtag_value) : wtag_value;
-          // H3_count++;
+         // writef(" paragraph %s\n", tag_value);
+          wtag_value = to!wstring(tag_value);
+          wstring curr_line = "";
+          size_t curr_width = 0;
+
+          wstring[] sublines;
 
           TTF font = new TTF(Searcher.find_font_path(PAGE_FONT));
+          size_t devider = font.head.unitsPerEm / TMP_P3_FONT_SIZE;
+
           foreach (wchar letter; wtag_value)
           {
-            string glyph_index = font.find_glyph_index(letter);
-            int dec_glyph_index = to!int(glyph_index, 16);
             int width = font.find_glyph_width(letter);
+            // writef("    width for %s is %d\n", letter, width);
+            // writef(" width for %s is %d\n", letter, width);
             line_width += width;
+            if(((line_width / devider) + PAGE_LEFT_MARGIN + TMP_P3_MARGIN) <= (PAGE_WIDTH - PAGE_RIGHT_MARGIN)) {
+              curr_line ~= letter;
+              curr_width = (line_width + PAGE_LEFT_MARGIN + TMP_P3_MARGIN );
+            }
+            else {
+              sublines ~= curr_line;
+              curr_line = "";
+              curr_width = 0;
+              line_width = 0;
+            }
+          }  
+          
+          // добавить остальные саблинии
+          // writef(" sublines count %d for %s\n", sublines.length, tag_value);
+          if(sublines.length > 1) {
+            for(size_t j = sublines.length - 1; j >= 1; j--)
+            {
+              string ch_line = PDF_Object.part_create_text_stream(
+                PAGE_LEFT_MARGIN + TMP_P3_MARGIN, 
+                0, 
+                (sublines.length - 1 != j) ? prev_bottom_margin + TMP_P3_ROWSPACE : (prev_bottom_margin + TMP_P3_AFTER + add_margin_before(parse_tree, i)), 
+                "F1", 
+                TMP_P3_FONT_SIZE, 
+                cast(wchar[])sublines[j],
+                Searcher.find_font_path(PAGE_FONT)
+              );
+              children ~= ch_line;
+              (sublines.length - 1 != j) ? (children_widths += TMP_P3_ROWSPACE) : (children_widths += (TMP_P3_AFTER + add_margin_before(parse_tree, i)));
+              (sublines.length - 1 != j) ? (prev_bottom_margin += TMP_P3_ROWSPACE) : (prev_bottom_margin += (TMP_P3_AFTER + add_margin_before(parse_tree, i)));
+            }
+          } else {
+            sublines ~= curr_line;
           }
 
-          size_t devider = font.head.unitsPerEm / H3_FONT_SIZE;
-          // writef("\n WIDTH - | %d <-> %d | RES - | %d |FOR %s\n", line_width, line_width / 161, (PAGE_WIDTH - (line_width / 12))/ 2, wtag_value);
+          // добавить первую линию
           string ch_text = PDF_Object.part_create_text_stream(
-            // WHY 320 ??
-            ((PAGE_WIDTH + H3_MARGIN) - (line_width / devider ))/ 2, 
+            PAGE_LEFT_MARGIN + TMP_P3_MARGIN + TMP_P3_REDLINE, 
             0, 
-            prev_bottom_margin + H3_AFTER + add_margin_before(parse_tree, i), 
-            (H3_FORMAT == "жирный") ? "F2" : "F1", 
-            H3_FONT_SIZE, 
-            cast(wchar[])wtag_value,
-            Searcher.find_font_path(PAGE_FONT ~ " Bold")
-            // "/System/Library/Fonts/Supplemental/Times New Roman.ttf"
+            (sublines.length > 1) ? prev_bottom_margin + TMP_P3_ROWSPACE : prev_bottom_margin + TMP_P3_AFTER + add_margin_before(parse_tree, i), 
+            "F1", 
+            TMP_P3_FONT_SIZE, 
+            cast(wchar[])sublines[0],
+            Searcher.find_font_path(PAGE_FONT)
           );
           children ~= ch_text;
-          children_widths += (H3_AFTER + add_margin_before(parse_tree, i));
-          prev_bottom_margin += (H3_AFTER + add_margin_before(parse_tree, i));
+          (sublines.length > 1) ? (children_widths += TMP_P3_ROWSPACE) : (children_widths += (TMP_P3_AFTER + add_margin_before(parse_tree, i)));
+          (sublines.length > 1) ? (prev_bottom_margin += TMP_P3_ROWSPACE) : (prev_bottom_margin += (TMP_P3_AFTER + add_margin_before(parse_tree, i)));
+          // writef(" AFTER %s -> %d\n", sublines[0], add_margin_before(parse_tree, i));
+          // writef(" SUbstring count %d\n", sublines.length);
 
+          // writef("\n HEADER 1 %s - %s - %s - %d\n", wtag_value, H1_REGISTRE, capitalize(tag_value), line_width);
+          // writef(" AFTER THIS -> %d\n", add_margin_before(parse_tree, i));
           // уникальн ые буквы
           foreach (wchar letter; wtag_value)
           {
             if(!unique_letters.canFind(letter)) unique_letters ~= letter;
-            // writef("%s => | dec - %d | hex -> %s |\n", letter, cast(int)letter, dec_to_hexa(cast(int)letter));
-          }        
+          }          
+        }
+        else if(tag_name == "\\з3")
+        {
+          create_header_obj(
+            parse_tree, i,
+            unique_letters, children, children_widths, prev_bottom_margin, 
+            h3_count, tag_value, 
+            H3_REGISTRE, H3_NUMBERING, H3_FONT_SIZE, H3_FORMAT, H3_AFTER, H3_MARGIN, H3_ALIGMENT,
+            with_image
+          );
+          // wtag_value = (H3_REGISTRE == "капс") ? to!wstring(tag_value.toUpper) : to!wstring(tag_value);
+          // // wtag_value = (H3_NUMBERING == "да") ? (to!wstring(h3_count--) ~ " " ~ wtag_value) : wtag_value;
+          // // H3_count++;
+
+          // TTF font = new TTF(Searcher.find_font_path(PAGE_FONT));
+          // foreach (wchar letter; wtag_value)
+          // {
+          //   string glyph_index = font.find_glyph_index(letter);
+          //   int dec_glyph_index = to!int(glyph_index, 16);
+          //   int width = font.find_glyph_width(letter);
+          //   line_width += width;
+          // }
+
+          // size_t devider = font.head.unitsPerEm / H3_FONT_SIZE;
+          // // writef("\n WIDTH - | %d <-> %d | RES - | %d |FOR %s\n", line_width, line_width / 161, (PAGE_WIDTH - (line_width / 12))/ 2, wtag_value);
+          // string ch_text = PDF_Object.part_create_text_stream(
+          //   // WHY 320 ??
+          //   ((PAGE_WIDTH + H3_MARGIN) - (line_width / devider ))/ 2, 
+          //   0, 
+          //   prev_bottom_margin + H3_AFTER + add_margin_before(parse_tree, i), 
+          //   (H3_FORMAT == "жирный") ? "F2" : "F1", 
+          //   H3_FONT_SIZE, 
+          //   cast(wchar[])wtag_value,
+          //   Searcher.find_font_path(PAGE_FONT ~ " Bold")
+          //   // "/System/Library/Fonts/Supplemental/Times New Roman.ttf"
+          // );
+          // children ~= ch_text;
+          // children_widths += (H3_AFTER + add_margin_before(parse_tree, i));
+          // prev_bottom_margin += (H3_AFTER + add_margin_before(parse_tree, i));
+
+          // // уникальн ые буквы
+          // foreach (wchar letter; wtag_value)
+          // {
+          //   if(!unique_letters.canFind(letter)) unique_letters ~= letter;
+          //   // writef("%s => | dec - %d | hex -> %s |\n", letter, cast(int)letter, dec_to_hexa(cast(int)letter));
+          // }        
         }
         else if(tag_name == "\\тз3")
         {
@@ -2183,12 +2425,12 @@ class PDF_Body
           );
           children ~= ch_text;
           
-          writef(" BEFORE | %d | %d | with %d + %d \n", children_widths, prev_bottom_margin, TMP_H6_AFTER, add_margin_before(parse_tree, i));
+          // writef(" BEFORE | %d | %d | with %d + %d \n", children_widths, prev_bottom_margin, TMP_H6_AFTER, add_margin_before(parse_tree, i));
           
           children_widths += (TMP_H6_AFTER + add_margin_before(parse_tree, i));
           prev_bottom_margin += (TMP_H6_AFTER + add_margin_before(parse_tree, i));
 
-          writef(" AFTER | %d | %d |\n", children_widths, prev_bottom_margin);
+          // writef(" AFTER | %d | %d |\n", children_widths, prev_bottom_margin);
           // уникальн ые буквы
           foreach (wchar letter; wtag_value)
           {
@@ -2209,7 +2451,7 @@ class PDF_Body
       page.gstate_obj.create_gstate(++id, 0);
 
       page.cs_embed_obj = new PDF_Object();
-      page.cs_embed_obj.create_colorspace_embedd_object(++id, 0, "/Users/mac/Downloads/sRGB2014.icc");
+      page.cs_embed_obj.create_colorspace_embedd_object(++id, 0, "/usr/share/color/icc/colord/sRGB.icc");
 
       // PDF_Object cs_obj = new PDF_Object();
       // cs_obj.create_colorspace_object(id + 2, 0, cs_embed_obj.name);
@@ -2237,7 +2479,7 @@ class PDF_Body
       page.bcid_tbl_obj.create_cid_tbl(++id, 0, unique_letters, Searcher.find_font_path(PAGE_FONT ~ " Bold"));
 
       page.image_obj = new PDF_Object();
-      page.image_obj.create_image_resource_object(++id, 0, 256, 256, "/Users/mac/Desktop/Projects/yard/test/ASTU.jpg", page.cs_embed_obj.name);
+      page.image_obj.create_image_resource_object(++id, 0, 256, 256, "/home/artjom/Рабочий стол/Projects/yard/test/ASTU.jpg", page.cs_embed_obj.name);
     
       page.resources_obj = new PDF_Object();
       page.resources_obj.create_font_object(++id, 0, "CIDFontType2", "F1", "YAZWPA+Times-Roman", page.font_desc_obj.name, unique_letters, Searcher.find_font_path(PAGE_FONT));
@@ -2739,6 +2981,17 @@ class PDF_Builder
       TMP_P2_AFTER             = to!size_t(template_tree.get_templ_opt_value("!" ~ TAGS.TP2, TXT_STYLE.AFTER));
       TMP_P2_ROWSPACE          = to!size_t(template_tree.get_templ_opt_value("!" ~ TAGS.TP2, TXT_STYLE.ROWSPACE));
       TMP_P2_NUMBERING         = template_tree.get_templ_opt_value("!" ~ TAGS.TP2, TXT_STYLE.NUMBERING);    
+
+      TMP_P3_FONT_SIZE         = to!size_t(template_tree.get_templ_opt_value("!" ~ TAGS.TP3, TXT_STYLE.FSIZE));
+      TMP_P3_ALIGMENT          = template_tree.get_templ_opt_value("!" ~ TAGS.TP3, TXT_STYLE.ALIGMENT);
+      TMP_P3_REGISTRE          = template_tree.get_templ_opt_value("!" ~ TAGS.TP3, TXT_STYLE.REGISTRE);
+      TMP_P3_FORMAT            = template_tree.get_templ_opt_value("!" ~ TAGS.TP3, TXT_STYLE.FORMAT);
+      TMP_P3_REDLINE           = to!size_t(template_tree.get_templ_opt_value("!" ~ TAGS.TP3, TXT_STYLE.REDLINE));
+      TMP_P3_MARGIN            = to!size_t(template_tree.get_templ_opt_value("!" ~ TAGS.TP3, TXT_STYLE.MARGIN));
+      TMP_P3_BEFORE            = to!size_t(template_tree.get_templ_opt_value("!" ~ TAGS.TP3, TXT_STYLE.BEFORE)); 
+      TMP_P3_AFTER             = to!size_t(template_tree.get_templ_opt_value("!" ~ TAGS.TP3, TXT_STYLE.AFTER));
+      TMP_P3_ROWSPACE          = to!size_t(template_tree.get_templ_opt_value("!" ~ TAGS.TP3, TXT_STYLE.ROWSPACE));
+      TMP_P3_NUMBERING         = template_tree.get_templ_opt_value("!" ~ TAGS.TP3, TXT_STYLE.NUMBERING);  
 
       TMP_CE_FONT_SIZE         = to!size_t(template_tree.get_templ_opt_value("!" ~ TAGS.TCE, TXT_STYLE.FSIZE));
       TMP_CE_ALIGMENT          = template_tree.get_templ_opt_value("!" ~ TAGS.TCE, TXT_STYLE.ALIGMENT);
